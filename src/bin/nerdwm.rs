@@ -6,15 +6,15 @@ use nerdwm::wm;
 fn setup_logger() {
     let xdg_dirs = xdg::BaseDirectories::with_prefix("nerdwm").unwrap();
 
-    let mut current_log = xdg_dirs.get_cache_home();
-    current_log.push("logs");
+    let mut log_path = xdg_dirs.get_cache_home();
+    log_path.push("logs");
 
-    if !current_log.exists() {
-        std::fs::create_dir_all(&current_log).unwrap();
+    if !log_path.exists() {
+        std::fs::create_dir_all(&log_path).unwrap();
     }
 
     // Log file with current timestamp.
-    current_log.push(
+    log_path.push(
         &format!(
             "{}.log",
             chrono::Local::now().format("nerdwm-%Y-%m-%d-%H:%M:%S")
@@ -38,7 +38,7 @@ fn setup_logger() {
             ))
         })
         .level(current_log_level)
-        .chain(fern::log_file(current_log).unwrap())
+        .chain(fern::log_file(log_path).unwrap())
         .apply()
         .unwrap();
 }

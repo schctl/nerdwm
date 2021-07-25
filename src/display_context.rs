@@ -64,7 +64,6 @@ impl DisplayContext {
     /// Flush the X command queue.
     pub fn flush(&self) {
         unsafe { (self.xlib.XSync)(self.display, xlib::False) };
-        debug!("Flushed request queue");
     }
 
     /// Set the input event mask for a window.
@@ -74,14 +73,12 @@ impl DisplayContext {
 
     /// Get next X event.
     pub fn get_next_event(&self) -> xlib::XEvent {
-        debug!("{} Pending events", unsafe {
-            (self.xlib.XPending)(self.display)
-        });
-
-        let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
         unsafe {
+            debug!("{} Pending events", (self.xlib.XPending)(self.display));
+
+            let mut event: xlib::XEvent = std::mem::zeroed();
             (self.xlib.XNextEvent)(self.display, &mut event);
-        };
-        event
+            event
+        }
     }
 }

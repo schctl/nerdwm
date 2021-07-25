@@ -53,7 +53,10 @@ impl WindowManager {
 
         // Create handles for existing windows
         context.grab_server();
+
         for w in root.get_windows(&context) {
+            info!("Found window {:x?}", w);
+
             let internal = window::Window::from_xid(w);
             let properties = internal.get_properties(&context);
 
@@ -69,16 +72,21 @@ impl WindowManager {
                 0x111111,
             );
 
+            frame.set_event_mask(
+                &context,
+                xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
+            );
             frame.set_save_set(&context, true);
-            internal.reparent(&context, &frame);
-
             frame.map(&context);
+
+            internal.reparent(&context, &frame);
             internal.map(&context);
 
             let client_window = client::ClientWindow { internal, frame };
 
             windows.push(client_window)
         }
+
         context.ungrab_server();
 
         Self {
@@ -93,11 +101,14 @@ impl WindowManager {
         loop {
             let event = self.context.get_next_event();
 
-            debug!("Event {:?}", event);
+            debug!("Event[{:?}] {:x?}", event.get_type(), event);
 
             match event.get_type() {
                 // On Window Create
-                xlib::CreateNotify => info!("Window Created"),
+                xlib::CreateNotify => info!(
+                    "Window Created {:x?}",
+                    unsafe { event.create_window }.window
+                ),
                 // Window Properties Change
                 xlib::ConfigureRequest => {
                     let configure_request = unsafe { event.configure_request };
@@ -112,7 +123,7 @@ impl WindowManager {
                         stack_mode: configure_request.detail,
                     };
 
-                    // If a window exists, reconfigure its frame as well to accomodate resizing/etc.
+                    // If a window exists, reconfigure its frame as well to accommodate resizing/etc.
                     if let Some(window) = self
                         .windows
                         .iter()
@@ -123,19 +134,25 @@ impl WindowManager {
                             &self.context,
                             &mut frame_changes,
                             configure_request.value_mask as u32,
-                        )
+                        );
+                        debug!("Configured frame");
                     }
 
                     let window = window::Window::from_xid(configure_request.window);
+
                     window.configure(
                         &self.context,
                         &mut changes,
                         configure_request.value_mask as u32,
                     );
+
+                    info!("Configured window {:x?}", configure_request.window);
                 }
                 // Window Map Request
                 xlib::MapRequest => {
-                    let internal = window::Window::from_xid(unsafe { event.map_request }.window);
+                    let map_request = unsafe { event.map_request };
+
+                    let internal = window::Window::from_xid(map_request.window);
                     let properties = internal.get_properties(&self.context);
 
                     let frame = window::Window::create(
@@ -150,15 +167,21 @@ impl WindowManager {
                         0x111111,
                     );
 
+                    frame.set_event_mask(
+                        &self.context,
+                        xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
+                    );
                     frame.set_save_set(&self.context, true);
-                    internal.reparent(&self.context, &frame);
-
                     frame.map(&self.context);
+
+                    internal.reparent(&self.context, &frame);
                     internal.map(&self.context);
 
                     let client_window = client::ClientWindow { internal, frame };
 
-                    self.windows.push(client_window)
+                    self.windows.push(client_window);
+
+                    info!("Mapped window {:x?}", map_request.window);
                 }
                 // On Window Unmap
                 xlib::UnmapNotify => {
@@ -174,7 +197,29 @@ impl WindowManager {
                         client.internal.reparent(&self.context, &self.root);
                         client.frame.set_save_set(&self.context, false);
                         client.frame.destroy(&self.context);
+
+                        debug!("Destroyed frame");
                     }
+
+                    info!("Unmapped window {:x?}", unmap_event.window);
+                }
+                xlib::DestroyNotify => {
+                    let destroy_event = unsafe { event.destroy_window };
+
+                    if let Some(pos) = self
+                        .windows
+                        .iter()
+                        .position(|w| w.internal.get_xid() == destroy_event.window)
+                    {
+                        let client = self.windows.remove(pos);
+                        client.frame.unmap(&self.context);
+                        client.frame.set_save_set(&self.context, false);
+                        client.frame.destroy(&self.context);
+
+                        debug!("Destroyed frame");
+                    }
+
+                    info!("Destroyed window {:x?}", destroy_event.window);
                 }
                 _ => {}
             }

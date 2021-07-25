@@ -3,6 +3,7 @@
 use crate::window;
 
 /// Client window and decorations.
+#[derive(Debug, Clone, Copy)]
 pub struct ClientWindow {
     pub internal: window::Window,
     pub frame: window::Window,

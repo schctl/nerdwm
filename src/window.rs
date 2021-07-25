@@ -6,6 +6,7 @@ use x11_dl::xlib;
 use crate::display_context::DisplayContext;
 
 /// Structure and methods containing an X window.
+#[derive(Debug, Clone, Copy)]
 pub struct Window {
     xid: u64,
 }
