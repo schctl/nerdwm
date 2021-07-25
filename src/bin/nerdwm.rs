@@ -1,13 +1,6 @@
-#![allow(unused_imports)]
-
 use log::*;
 
-mod client;
-mod display_context;
-mod window;
-mod wm;
-
-use display_context::DisplayContext;
+use nerdwm::wm;
 
 /// Configure file logging.
 fn setup_logger() {

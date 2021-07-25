@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+//! X11 wrapper.
 
 use log::*;
 use x11_dl::xlib;
@@ -25,10 +25,7 @@ impl DisplayContext {
 
         info!("Connected to X server");
 
-        Self {
-            xlib,
-            display,
-        }
+        Self { xlib, display }
     }
 
     /// Get raw xlib context.
@@ -36,7 +33,7 @@ impl DisplayContext {
         &self.xlib
     }
 
-    /// Get current connection id.
+    /// Get connection id.
     pub fn get_connection(&self) -> *mut xlib::_XDisplay {
         self.display
     }
@@ -46,7 +43,7 @@ impl DisplayContext {
         window::Window::from_xid(unsafe { (self.xlib.XDefaultRootWindow)(self.display) })
     }
 
-    /// Set an error callback.
+    /// Set an error callback for xlib.
     pub fn set_error_callback(
         &self,
         callback: Option<unsafe extern "C" fn(*mut xlib::_XDisplay, *mut xlib::XErrorEvent) -> i32>,
@@ -54,7 +51,7 @@ impl DisplayContext {
         unsafe { (self.xlib.XSetErrorHandler)(callback) };
     }
 
-    /// Disable requests on all other connecions.
+    /// Disable requests on all other connections.
     pub fn grab_server(&self) {
         unsafe { (self.xlib.XGrabServer)(self.display) };
     }

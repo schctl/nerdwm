@@ -2,7 +2,12 @@
 name = "nerdwm"
 version = "0.0.1"
 authors = ["Sachin Cherian <sachinctl@protonmail.com>"]
+description = "A simple Unix window manager."
 edition = "2018"
+categories = ["window manager"]
+license = "MIT"
+repository = "https://github.com/schctl/nerdwm"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,5 +15,18 @@ edition = "2018"
 x11-dl = "2.18"
 chrono = "0.4"
 log = "0.4"
-fern = "0.6"
-xdg = "2.2.0"
+
+fern = { version = "0.6", optional = true }
+xdg = { version = "2.2.0", optional = true }
+
+[lib]
+name = "nerdwm"
+path = "src/lib.rs"
+
+[features]
+bin = ["fern", "xdg"]
+
+[[bin]]
+name = "nerdwm"
+path = "src/bin/nerdwm.rs"
+required-features = ["bin"]

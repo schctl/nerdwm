@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+//! X window wrapper.
+
 use log::*;
 use x11_dl::xlib;
 

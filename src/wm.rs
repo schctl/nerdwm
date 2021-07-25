@@ -1,3 +1,5 @@
+//! Window Manager implementation.
+
 use log::*;
 use x11_dl::xlib;
 
