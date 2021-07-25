@@ -1,12 +1,13 @@
 #![allow(unused_imports)]
 
-use log::{debug, info};
+use log::*;
 
-mod display_manager;
+mod client;
+mod display_context;
 mod window;
 mod wm;
 
-use display_manager::DisplayManager;
+use display_context::DisplayContext;
 
 /// Configure file logging.
 fn setup_logger() {
@@ -53,8 +54,6 @@ fn main() {
     setup_logger();
 
     let mut wm = wm::WindowManager::new();
-
     info!("Initialized.");
-
     wm.run()
 }
