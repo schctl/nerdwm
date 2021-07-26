@@ -3,6 +3,7 @@
 use log::*;
 use x11_dl::xlib;
 
+use crate::event;
 use crate::window;
 
 /// Safe wrapper around an X server connection.
@@ -71,14 +72,20 @@ impl DisplayContext {
         unsafe { (self.xlib.XSelectInput)(self.display, window, mask) };
     }
 
-    /// Get next X event.
-    pub fn get_next_event(&self) -> xlib::XEvent {
+    /// Get next input event.
+    pub fn get_next_event(&self) -> event::Event {
         unsafe {
             debug!("{} Pending events", (self.xlib.XPending)(self.display));
 
-            let mut event: xlib::XEvent = std::mem::zeroed();
-            (self.xlib.XNextEvent)(self.display, &mut event);
-            event
+            let mut raw_event: xlib::XEvent = std::mem::zeroed();
+            (self.xlib.XNextEvent)(self.display, &mut raw_event);
+            raw_event.into()
         }
+    }
+
+    /// Create a cursor.
+    /// See cursor definition from https://tronche.com/gui/x/xlib/appendix/b/
+    pub fn get_cursor(&self, cursor: u32) -> u64 {
+        unsafe { (self.xlib.XCreateFontCursor)(self.display, cursor) }
     }
 }

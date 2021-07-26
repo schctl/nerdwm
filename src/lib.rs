@@ -5,3 +5,4 @@ pub mod client;
 pub mod display_context;
 pub mod window;
 pub mod wm;
+pub mod event;

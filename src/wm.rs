@@ -4,6 +4,7 @@ use log::*;
 use x11_dl::xlib;
 
 use crate::client;
+use crate::event;
 use crate::display_context::DisplayContext;
 use crate::window;
 
@@ -38,6 +39,7 @@ impl WindowManager {
 
         // WM check
         context.set_error_callback(Some(on_startup_error));
+
         // Inputs for root window.
         // Substructure redirection allows the WM to intercept
         // these events and handle them on its own.
@@ -45,8 +47,9 @@ impl WindowManager {
             &context,
             xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
         );
-        context.flush();
+
         context.set_error_callback(Some(on_x_error));
+        context.flush();
 
         // Add existing windows to client list
         let mut windows = vec![];
@@ -89,6 +92,23 @@ impl WindowManager {
 
         context.ungrab_server();
 
+        // Initialize root
+        let root_mask = xlib::SubstructureRedirectMask
+            | xlib::SubstructureNotifyMask;
+
+        let mut properties: xlib::XSetWindowAttributes = unsafe { std::mem::zeroed() };
+        properties.cursor = context.get_cursor(68);
+        properties.event_mask = root_mask;
+
+        root.set_properties(
+            &context,
+            &mut properties,
+            xlib::CWCursor | xlib::CWEventMask,
+        );
+        root.set_event_mask(&context, root_mask);
+
+        context.flush();
+
         Self {
             context,
             root,
@@ -101,18 +121,16 @@ impl WindowManager {
         loop {
             let event = self.context.get_next_event();
 
-            debug!("Event[{:?}] {:x?}", event.get_type(), event);
+            debug!("Event [{:x?}]", event);
 
-            match event.get_type() {
+            match event {
                 // On Window Create
-                xlib::CreateNotify => info!(
+                event::Event::WindowCreate(e) => info!(
                     "Window Created {:x?}",
-                    unsafe { event.create_window }.window
+                    e.window
                 ),
                 // Window Properties Change
-                xlib::ConfigureRequest => {
-                    let configure_request = unsafe { event.configure_request };
-
+                event::Event::WindowConfigureRequest(configure_request) => {
                     let mut changes = xlib::XWindowChanges {
                         x: configure_request.x,
                         y: configure_request.y,
@@ -149,9 +167,7 @@ impl WindowManager {
                     info!("Configured window {:x?}", configure_request.window);
                 }
                 // Window Map Request
-                xlib::MapRequest => {
-                    let map_request = unsafe { event.map_request };
-
+                event::Event::WindowMapRequest(map_request) => {
                     let internal = window::Window::from_xid(map_request.window);
                     let properties = internal.get_properties(&self.context);
 
@@ -184,9 +200,7 @@ impl WindowManager {
                     info!("Mapped window {:x?}", map_request.window);
                 }
                 // On Window Unmap
-                xlib::UnmapNotify => {
-                    let unmap_event = unsafe { event.unmap };
-
+                event::Event::WindowUnmap(unmap_event) => {
                     if let Some(pos) = self
                         .windows
                         .iter()
@@ -203,9 +217,7 @@ impl WindowManager {
 
                     info!("Unmapped window {:x?}", unmap_event.window);
                 }
-                xlib::DestroyNotify => {
-                    let destroy_event = unsafe { event.destroy_window };
-
+                event::Event::WindowDestroy(destroy_event) => {
                     if let Some(pos) = self
                         .windows
                         .iter()
