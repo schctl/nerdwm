@@ -1,4 +1,4 @@
-//! X11 wrapper.
+//! X connection wrapper.
 
 use log::*;
 use x11_dl::xlib;
@@ -12,6 +12,12 @@ pub struct DisplayContext {
     xlib: xlib::Xlib,
     /// Connection to the server
     display: *mut xlib::_XDisplay,
+}
+
+impl Default for DisplayContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DisplayContext {

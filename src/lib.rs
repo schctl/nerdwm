@@ -2,7 +2,9 @@
 #![allow(unused_imports)]
 
 pub mod client;
+pub mod config;
 pub mod display_context;
+pub mod event;
+pub mod input;
 pub mod window;
 pub mod wm;
-pub mod event;

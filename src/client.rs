@@ -1,4 +1,4 @@
-//! Client utilities.
+//! Window Manager client utilities.
 
 use crate::window;
 

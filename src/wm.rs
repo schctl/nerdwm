@@ -1,11 +1,13 @@
 //! Window Manager implementation.
 
 use log::*;
+use x11_dl::keysym;
 use x11_dl::xlib;
 
 use crate::client;
-use crate::event;
+use crate::config;
 use crate::display_context::DisplayContext;
+use crate::event;
 use crate::window;
 
 /// Occurs if another WM is running.
@@ -26,12 +28,13 @@ extern "C" fn on_x_error(_display: *mut xlib::Display, error: *mut xlib::XErrorE
 pub struct WindowManager {
     context: DisplayContext,
     root: window::Window,
+    config: config::Config,
     windows: Vec<client::ClientWindow>,
 }
 
 impl WindowManager {
     /// Creates a new window manager, and connection to the X server.
-    pub fn new() -> Self {
+    pub fn new(config: config::Config) -> Self {
         let context = DisplayContext::new();
 
         // Startup
@@ -51,69 +54,108 @@ impl WindowManager {
         context.set_error_callback(Some(on_x_error));
         context.flush();
 
-        // Add existing windows to client list
-        let mut windows = vec![];
+        let mut wm = Self {
+            context,
+            root,
+            config,
+            windows: vec![],
+        };
 
         // Create handles for existing windows
-        context.grab_server();
+        wm.context.grab_server();
 
-        for w in root.get_windows(&context) {
+        // Add existing windows to client list
+        for w in root.get_windows(&wm.context) {
+            wm.push_window(w);
             info!("Found window {:x?}", w);
-
-            let internal = window::Window::from_xid(w);
-            let properties = internal.get_properties(&context);
-
-            let frame = window::Window::create(
-                &context,
-                &root,
-                properties.x,
-                properties.y,
-                properties.width as u32,
-                properties.height as u32,
-                5,
-                0xffffff,
-                0x111111,
-            );
-
-            frame.set_event_mask(
-                &context,
-                xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
-            );
-            frame.set_save_set(&context, true);
-            frame.map(&context);
-
-            internal.reparent(&context, &frame);
-            internal.map(&context);
-
-            let client_window = client::ClientWindow { internal, frame };
-
-            windows.push(client_window)
         }
 
-        context.ungrab_server();
+        wm.context.ungrab_server();
 
-        // Initialize root
-        let root_mask = xlib::SubstructureRedirectMask
-            | xlib::SubstructureNotifyMask;
+        wm.init_root();
+        wm.ungrab_all_binds();
+        wm.grab_binds();
+
+        wm.context.flush();
+
+        wm
+    }
+
+    /// Configure the root window.
+    fn init_root(&self) {
+        let root_mask = xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask;
 
         let mut properties: xlib::XSetWindowAttributes = unsafe { std::mem::zeroed() };
-        properties.cursor = context.get_cursor(68);
+        properties.cursor = self.context.get_cursor(68);
         properties.event_mask = root_mask;
 
-        root.set_properties(
-            &context,
+        self.root.set_properties(
+            &self.context,
             &mut properties,
             xlib::CWCursor | xlib::CWEventMask,
         );
-        root.set_event_mask(&context, root_mask);
+        self.root.set_event_mask(&self.context, root_mask);
+    }
 
-        context.flush();
-
-        Self {
-            context,
-            root,
-            windows,
+    /// Grab window management bindings.
+    fn grab_binds(&self) {
+        for bind in &self.config.keybinds {
+            self.root.grab_key(&self.context, bind.bind.into(), {
+                let mut mask = 0;
+                for modifier in bind.modifiers.iter() {
+                    mask |= u32::from(*modifier)
+                }
+                mask
+            })
         }
+
+        for bind in &self.config.mousebinds {
+            self.root.grab_button(&self.context, bind.bind.into(), {
+                let mut mask = 0;
+                for modifier in bind.modifiers.iter() {
+                    mask |= u32::from(*modifier)
+                }
+                mask
+            })
+        }
+    }
+
+    /// Ungrab all window management bindings.
+    fn ungrab_all_binds(&self) {
+        self.root
+            .ungrab_button(&self.context, xlib::AnyButton as u32, xlib::AnyModifier);
+        self.root
+            .ungrab_key(&self.context, xlib::AnyKey as u32, xlib::AnyModifier);
+    }
+
+    /// Push a window to the current stack.
+    fn push_window(&mut self, window: u64) {
+        let internal = window::Window::from_xid(window);
+        let properties = internal.get_properties(&self.context);
+
+        let frame = window::Window::create(
+            &self.context,
+            &self.root,
+            properties.x,
+            properties.y,
+            properties.width as u32,
+            properties.height as u32,
+            self.config.border_width,
+            self.config.border_color,
+            0x111111,
+        );
+
+        frame.set_event_mask(
+            &self.context,
+            xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
+        );
+        frame.set_save_set(&self.context, true);
+        frame.map(&self.context);
+
+        internal.reparent(&self.context, &frame);
+        internal.map(&self.context);
+
+        self.windows.push(client::ClientWindow { internal, frame })
     }
 
     /// Run the event loop.
@@ -125,10 +167,7 @@ impl WindowManager {
 
             match event {
                 // On Window Create
-                event::Event::WindowCreate(e) => info!(
-                    "Window Created {:x?}",
-                    e.window
-                ),
+                event::Event::WindowCreate(e) => info!("Window Created {:x?}", e.window),
                 // Window Properties Change
                 event::Event::WindowConfigureRequest(configure_request) => {
                     let mut changes = xlib::XWindowChanges {
@@ -168,35 +207,7 @@ impl WindowManager {
                 }
                 // Window Map Request
                 event::Event::WindowMapRequest(map_request) => {
-                    let internal = window::Window::from_xid(map_request.window);
-                    let properties = internal.get_properties(&self.context);
-
-                    let frame = window::Window::create(
-                        &self.context,
-                        &self.root,
-                        properties.x,
-                        properties.y,
-                        properties.width as u32,
-                        properties.height as u32,
-                        5,
-                        0xffffff,
-                        0x111111,
-                    );
-
-                    frame.set_event_mask(
-                        &self.context,
-                        xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
-                    );
-                    frame.set_save_set(&self.context, true);
-                    frame.map(&self.context);
-
-                    internal.reparent(&self.context, &frame);
-                    internal.map(&self.context);
-
-                    let client_window = client::ClientWindow { internal, frame };
-
-                    self.windows.push(client_window);
-
+                    self.push_window(map_request.window);
                     info!("Mapped window {:x?}", map_request.window);
                 }
                 // On Window Unmap
