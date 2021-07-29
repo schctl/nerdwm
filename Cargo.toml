@@ -2,7 +2,7 @@
 name = "nerdwm"
 version = "0.0.1"
 authors = ["Sachin Cherian <sachinctl@protonmail.com>"]
-description = "A simple Unix window manager."
+description = "A simple X11 window manager."
 edition = "2018"
 categories = ["window manager"]
 license = "MIT"

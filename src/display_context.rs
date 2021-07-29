@@ -102,9 +102,9 @@ impl DisplayContext {
             (self.xlib.XGrabKey)(
                 self.display,
                 (self.xlib.XKeysymToKeycode)(self.display, key as u64) as i32, // key code
-                modifiers,           // modifier mask
-                window.get_xid(),    // grab window
-                1,                   // owner events (?)
+                modifiers,                                                     // modifier mask
+                window.get_xid(),                                              // grab window
+                1,                                                             // owner events (?)
                 xlib::GrabModeAsync, // process pointer events without freezing
                 xlib::GrabModeAsync, // process keyboard events without freezing
             )
@@ -122,15 +122,15 @@ impl DisplayContext {
             // https://tronche.com/gui/x/xlib/input/XGrabButton.html
             (self.xlib.XGrabButton)(
                 self.display,
-                button,            // mouse button
-                modifiers,         // modifier mask
-                window.get_xid(),  // grab window
-                0,                 // owner events
+                button,                                                   // mouse button
+                modifiers,                                                // modifier mask
+                window.get_xid(),                                         // grab window
+                0,                                                        // owner events
                 (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32, // event mask
-                xlib::GrabModeAsync,  // process pointer events without freezing
-                xlib::GrabModeAsync,  // process keyboard events without freezing
-                0,  // confine pointer to window
-                0,  // cursor to display
+                xlib::GrabModeAsync, // process pointer events without freezing
+                xlib::GrabModeAsync, // process keyboard events without freezing
+                0,                   // confine pointer to window
+                0,                   // cursor to display
             )
         };
     }
@@ -146,8 +146,8 @@ impl DisplayContext {
             // https://tronche.com/gui/x/xlib/input/XGrabPointer.html
             (self.xlib.XGrabPointer)(
                 self.display,
-                window.get_xid(),  // grab window
-                1,                 // owner events
+                window.get_xid(), // grab window
+                1,                // owner events
                 (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32, // event mask
                 xlib::GrabModeAsync, // process pointer events without freezing
                 xlib::GrabModeAsync, // process keyboard events without freezing

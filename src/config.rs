@@ -20,12 +20,32 @@ pub struct KeyBind {
     pub modifiers: Vec<input::ModifierMask>,
 }
 
+impl KeyBind {
+    pub fn get_mask(&self) -> u32 {
+        let mut mask = 0;
+        for modifier in &self.modifiers {
+            mask |= u32::from(*modifier);
+        }
+        mask
+    }
+}
+
 /// Button + Modifiers for a window manager action.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MouseBind {
     pub action: event::Action,
     pub bind: input::Button,
     pub modifiers: Vec<input::ModifierMask>,
+}
+
+impl MouseBind {
+    pub fn get_mask(&self) -> u32 {
+        let mut mask = 0;
+        for modifier in &self.modifiers {
+            mask |= u32::from(*modifier);
+        }
+        mask
+    }
 }
 
 /// Window Manager options.

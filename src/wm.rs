@@ -29,7 +29,9 @@ pub struct WindowManager {
     context: DisplayContext,
     root: window::Window,
     config: config::Config,
-    windows: Vec<client::ClientWindow>,
+    /// Stack of clients.
+    /// Order of focus.
+    clients: Vec<client::ClientWindow>,
 }
 
 impl WindowManager {
@@ -58,7 +60,7 @@ impl WindowManager {
             context,
             root,
             config,
-            windows: vec![],
+            clients: vec![],
         };
 
         // Create handles for existing windows
@@ -66,7 +68,7 @@ impl WindowManager {
 
         // Add existing windows to client list
         for w in root.get_windows(&wm.context) {
-            wm.push_window(w);
+            wm.push_client(w);
             info!("Found window {:x?}", w);
         }
 
@@ -78,9 +80,37 @@ impl WindowManager {
         wm
     }
 
+    /// Set focus onto one client.
+    fn focus_client(&self, window: &client::ClientWindow) {
+        for bind in &self.config.keybinds {
+            self.context
+                .grab_key(&window.internal, bind.bind.into(), bind.get_mask())
+        }
+
+        for bind in &self.config.mousebinds {
+            self.context
+                .grab_button(&window.internal, bind.bind.into(), bind.get_mask())
+        }
+
+        info!("Focused window.")
+    }
+
+    /// Get currently focused client.
+    fn get_focused_client(&self) -> Option<&client::ClientWindow> {
+        if self.clients.is_empty() {
+            Some(&self.clients[0])
+        } else {
+            None
+        }
+    }
+
     /// Configure the root window.
     fn init_root(&self) {
-        let root_mask = xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask;
+        let root_mask = xlib::SubstructureRedirectMask
+            | xlib::SubstructureNotifyMask
+            | xlib::ButtonPressMask
+            | xlib::ButtonReleaseMask
+            | xlib::PointerMotionMask;
 
         let mut properties: xlib::XSetWindowAttributes = unsafe { std::mem::zeroed() };
         properties.cursor = self.context.get_cursor(68);
@@ -95,7 +125,7 @@ impl WindowManager {
     }
 
     /// Push a window to the current stack.
-    fn push_window(&mut self, window: u64) {
+    fn push_client(&mut self, window: u64) {
         let internal = window::Window::from_xid(window);
         let properties = internal.get_properties(&self.context);
 
@@ -121,7 +151,16 @@ impl WindowManager {
         internal.reparent(&self.context, &frame);
         internal.map(&self.context);
 
-        self.windows.push(client::ClientWindow { internal, frame })
+        let client = client::ClientWindow { internal, frame };
+        self.focus_client(&client);
+        self.clients.insert(0, client);
+    }
+
+    /// Get client position in stack if it exists.
+    pub fn get_client(&self, xid: u64) -> Option<usize> {
+        self.clients
+            .iter()
+            .position(|w| w.internal.get_xid() == xid)
     }
 
     /// Run the event loop.
@@ -130,6 +169,8 @@ impl WindowManager {
             let event = self.context.get_next_event();
 
             debug!("Event [{:x?}]", event);
+
+            info!("Clients: [{:?}]", self.clients);
 
             match event {
                 // On Window Create
@@ -147,11 +188,8 @@ impl WindowManager {
                     };
 
                     // If a window exists, reconfigure its frame as well to accommodate resizing/etc.
-                    if let Some(window) = self
-                        .windows
-                        .iter()
-                        .find(|w| w.internal.get_xid() == configure_request.window)
-                    {
+                    if let Some(pos) = self.get_client(configure_request.window) {
+                        let window = self.clients[pos];
                         let mut frame_changes = changes;
                         window.frame.configure(
                             &self.context,
@@ -173,17 +211,13 @@ impl WindowManager {
                 }
                 // Window Map Request
                 event::Event::WindowMapRequest(map_request) => {
-                    self.push_window(map_request.window);
+                    self.push_client(map_request.window);
                     info!("Mapped window {:x?}", map_request.window);
                 }
                 // On Window Unmap
                 event::Event::WindowUnmap(unmap_event) => {
-                    if let Some(pos) = self
-                        .windows
-                        .iter()
-                        .position(|w| w.internal.get_xid() == unmap_event.window)
-                    {
-                        let client = self.windows.remove(pos);
+                    if let Some(pos) = self.get_client(unmap_event.window) {
+                        let client = self.clients.remove(pos);
                         client.frame.unmap(&self.context);
                         client.internal.reparent(&self.context, &self.root);
                         client.frame.set_save_set(&self.context, false);
@@ -195,12 +229,8 @@ impl WindowManager {
                     info!("Unmapped window {:x?}", unmap_event.window);
                 }
                 event::Event::WindowDestroy(destroy_event) => {
-                    if let Some(pos) = self
-                        .windows
-                        .iter()
-                        .position(|w| w.internal.get_xid() == destroy_event.window)
-                    {
-                        let client = self.windows.remove(pos);
+                    if let Some(pos) = self.get_client(destroy_event.window) {
+                        let client = self.clients.remove(pos);
                         client.frame.unmap(&self.context);
                         client.frame.set_save_set(&self.context, false);
                         client.frame.destroy(&self.context);
@@ -212,6 +242,11 @@ impl WindowManager {
                 }
                 event::Event::ButtonPress(button_press) => {
                     info!("Button {:x} pressed!", button_press.button);
+                    // Get the window the event occurred on
+                    if let Some(pos) = self.get_client(button_press.window) {
+                        let window = self.clients[pos];
+                        info!("Found event window: {:?}", window);
+                    }
                 }
                 event::Event::ButtonRelease(button_release) => {
                     info!("Button {:x} released!", button_release.button);

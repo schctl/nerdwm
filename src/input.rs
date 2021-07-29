@@ -5,6 +5,13 @@ use x11_dl::xlib;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy)]
+pub enum Mode {
+    None,
+    Move,
+    Resize,
+}
+
 /// Auto implement map.
 macro_rules! key_map {
     (
