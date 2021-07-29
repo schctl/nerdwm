@@ -94,4 +94,72 @@ impl DisplayContext {
     pub fn get_cursor(&self, cursor: u32) -> u64 {
         unsafe { (self.xlib.XCreateFontCursor)(self.display, cursor) }
     }
+
+    /// Passively grab keyboard key.
+    pub fn grab_key(&self, window: &window::Window, key: u32, modifiers: u32) {
+        unsafe {
+            // https://tronche.com/gui/x/xlib/input/XGrabKey.html
+            (self.xlib.XGrabKey)(
+                self.display,
+                (self.xlib.XKeysymToKeycode)(self.display, key as u64) as i32, // key code
+                modifiers,           // modifier mask
+                window.get_xid(),    // grab window
+                1,                   // owner events (?)
+                xlib::GrabModeAsync, // process pointer events without freezing
+                xlib::GrabModeAsync, // process keyboard events without freezing
+            )
+        };
+    }
+
+    /// Release grab on keyboard key.
+    pub fn ungrab_key(&self, window: &window::Window, key: u32, modifiers: u32) {
+        unsafe { (self.xlib.XUngrabKey)(self.display, key as i32, modifiers, window.get_xid()) };
+    }
+
+    /// Passively grab mouse button from window.
+    pub fn grab_button(&self, window: &window::Window, button: u32, modifiers: u32) {
+        unsafe {
+            // https://tronche.com/gui/x/xlib/input/XGrabButton.html
+            (self.xlib.XGrabButton)(
+                self.display,
+                button,            // mouse button
+                modifiers,         // modifier mask
+                window.get_xid(),  // grab window
+                0,                 // owner events
+                (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32, // event mask
+                xlib::GrabModeAsync,  // process pointer events without freezing
+                xlib::GrabModeAsync,  // process keyboard events without freezing
+                0,  // confine pointer to window
+                0,  // cursor to display
+            )
+        };
+    }
+
+    //// Release grab on mouse button.
+    pub fn ungrab_button(&self, window: &window::Window, button: u32, modifiers: u32) {
+        unsafe { (self.xlib.XUngrabButton)(self.display, button, modifiers, window.get_xid()) };
+    }
+
+    /// Actively grab the mouse pointer.
+    pub fn grab_pointer(&self, window: &window::Window, cursor: u64) {
+        unsafe {
+            // https://tronche.com/gui/x/xlib/input/XGrabPointer.html
+            (self.xlib.XGrabPointer)(
+                self.display,
+                window.get_xid(),  // grab window
+                1,                 // owner events
+                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32, // event mask
+                xlib::GrabModeAsync, // process pointer events without freezing
+                xlib::GrabModeAsync, // process keyboard events without freezing
+                0,                   // confine to window
+                cursor,              // cursor to display
+                xlib::CurrentTime,
+            )
+        };
+    }
+
+    /// Release grab on mouse pointer.
+    pub fn ungrab_pointer(&self) {
+        unsafe { (self.xlib.XUngrabPointer)(self.display, xlib::CurrentTime) };
+    }
 }

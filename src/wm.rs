@@ -73,9 +73,6 @@ impl WindowManager {
         wm.context.ungrab_server();
 
         wm.init_root();
-        wm.ungrab_all_binds();
-        wm.grab_binds();
-
         wm.context.flush();
 
         wm
@@ -95,37 +92,6 @@ impl WindowManager {
             xlib::CWCursor | xlib::CWEventMask,
         );
         self.root.set_event_mask(&self.context, root_mask);
-    }
-
-    /// Grab window management bindings.
-    fn grab_binds(&self) {
-        for bind in &self.config.keybinds {
-            self.root.grab_key(&self.context, bind.bind.into(), {
-                let mut mask = 0;
-                for modifier in bind.modifiers.iter() {
-                    mask |= u32::from(*modifier)
-                }
-                mask
-            })
-        }
-
-        for bind in &self.config.mousebinds {
-            self.root.grab_button(&self.context, bind.bind.into(), {
-                let mut mask = 0;
-                for modifier in bind.modifiers.iter() {
-                    mask |= u32::from(*modifier)
-                }
-                mask
-            })
-        }
-    }
-
-    /// Ungrab all window management bindings.
-    fn ungrab_all_binds(&self) {
-        self.root
-            .ungrab_button(&self.context, xlib::AnyButton as u32, xlib::AnyModifier);
-        self.root
-            .ungrab_key(&self.context, xlib::AnyKey as u32, xlib::AnyModifier);
     }
 
     /// Push a window to the current stack.
@@ -243,6 +209,12 @@ impl WindowManager {
                     }
 
                     info!("Destroyed window {:x?}", destroy_event.window);
+                }
+                event::Event::ButtonPress(button_press) => {
+                    info!("Button {:x} pressed!", button_press.button);
+                }
+                event::Event::ButtonRelease(button_release) => {
+                    info!("Button {:x} released!", button_release.button);
                 }
                 _ => {}
             }

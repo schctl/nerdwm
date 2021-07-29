@@ -167,64 +167,6 @@ impl Window {
         };
     }
 
-    /// Passively grab mouse button from window.
-    pub fn grab_button(&self, context: &DisplayContext, button: u32, modifiers: u32) {
-        unsafe {
-            (context.get_raw_context().XGrabButton)(
-                context.get_connection(),
-                button,
-                modifiers,
-                self.xid,
-                0,
-                (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32,
-                xlib::GrabModeSync,
-                xlib::GrabModeAsync,
-                0,
-                0,
-            )
-        };
-    }
-
-    //// Release grab on mouse button.
-    pub fn ungrab_button(&self, context: &DisplayContext, button: u32, modifiers: u32) {
-        unsafe {
-            (context.get_raw_context().XUngrabButton)(
-                context.get_connection(),
-                button,
-                modifiers,
-                self.xid,
-            )
-        };
-    }
-
-    /// Passively grab keyboard key.
-    pub fn grab_key(&self, context: &DisplayContext, key: u32, modifiers: u32) {
-        unsafe {
-            (context.get_raw_context().XGrabKey)(
-                context.get_connection(),
-                (context.get_raw_context().XKeysymToKeycode)(context.get_connection(), key as u64)
-                    as i32,
-                modifiers,
-                self.xid,
-                1,
-                xlib::GrabModeAsync,
-                xlib::GrabModeAsync,
-            )
-        };
-    }
-
-    /// Release grab on keyboard key.
-    pub fn ungrab_key(&self, context: &DisplayContext, key: u32, modifiers: u32) {
-        unsafe {
-            (context.get_raw_context().XUngrabKey)(
-                context.get_connection(),
-                key as i32,
-                modifiers,
-                self.xid,
-            )
-        };
-    }
-
     /// Send WM_DELETE_WINDOW or forcefully kill client.
     pub fn kill(&self, _context: &DisplayContext) {}
 

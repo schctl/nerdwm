@@ -7,5 +7,8 @@ Contributions are welcome but the primary goal of this project at the moment is 
 ## Features I will eventually try to add
 
 - Workspaces
-- A simple configuration format
+  - Each with their own mode
+    - Purely Floating
+    - Tiling (tiled windows by default but floating windows can exist)
+    - Fullscreen
 - Plugin interface <sup>(something I want to try to implement as I have never done this before)</sup>

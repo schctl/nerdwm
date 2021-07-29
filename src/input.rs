@@ -36,31 +36,31 @@ macro_rules! key_map {
 key_map! {
     Key {
         A => keysym::XK_A,
-        B => keysym::XK_A,
-        C => keysym::XK_A,
-        D => keysym::XK_A,
-        E => keysym::XK_A,
-        F => keysym::XK_A,
-        G => keysym::XK_A,
-        H => keysym::XK_A,
-        I => keysym::XK_A,
-        J => keysym::XK_A,
-        K => keysym::XK_A,
-        L => keysym::XK_A,
-        M => keysym::XK_A,
-        N => keysym::XK_A,
-        O => keysym::XK_A,
-        P => keysym::XK_A,
-        Q => keysym::XK_A,
-        R => keysym::XK_A,
-        S => keysym::XK_A,
-        T => keysym::XK_A,
-        U => keysym::XK_A,
-        V => keysym::XK_A,
-        W => keysym::XK_A,
-        X => keysym::XK_A,
-        Y => keysym::XK_A,
-        Z => keysym::XK_A,
+        B => keysym::XK_B,
+        C => keysym::XK_C,
+        D => keysym::XK_D,
+        E => keysym::XK_E,
+        F => keysym::XK_F,
+        G => keysym::XK_G,
+        H => keysym::XK_H,
+        I => keysym::XK_H,
+        J => keysym::XK_J,
+        K => keysym::XK_K,
+        L => keysym::XK_L,
+        M => keysym::XK_M,
+        N => keysym::XK_N,
+        O => keysym::XK_O,
+        P => keysym::XK_P,
+        Q => keysym::XK_Q,
+        R => keysym::XK_R,
+        S => keysym::XK_S,
+        T => keysym::XK_T,
+        U => keysym::XK_U,
+        V => keysym::XK_V,
+        W => keysym::XK_W,
+        X => keysym::XK_X,
+        Y => keysym::XK_Y,
+        Z => keysym::XK_Z,
         ArrowUp => keysym::XK_KP_Up,
         ArrowDown => keysym::XK_KP_Down,
         ArrowRight => keysym::XK_KP_Right,
@@ -78,8 +78,12 @@ key_map! {
 
 key_map! {
     ModifierMask {
-        Mod2 => xlib::Mod2Mask, // Alt
-        Mod4 => xlib::Mod4Mask, // Super
+        Mod1 => xlib::Mod1Mask,  // Alt
+        Mod2 => xlib::Mod2Mask,  // Num Lock
+        Mod3 => xlib::Mod3Mask,  // Scroll Lock
+        Mod4 => xlib::Mod4Mask,  // Super
         Shift => xlib::ShiftMask,
+        CapsLock => xlib::LockMask,
+        Control => xlib::ControlMask,
     }
 }

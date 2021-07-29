@@ -9,11 +9,18 @@ use serde::{Deserialize, Serialize};
 #[non_exhaustive]
 pub enum Event {
     Unknown,
+
     WindowCreate(xlib::XCreateWindowEvent),
     WindowDestroy(xlib::XDestroyWindowEvent),
     WindowMapRequest(xlib::XMapRequestEvent),
     WindowUnmap(xlib::XUnmapEvent),
     WindowConfigureRequest(xlib::XConfigureRequestEvent),
+
+    ButtonPress(xlib::XButtonPressedEvent),
+    ButtonRelease(xlib::XButtonReleasedEvent),
+    KeyPress(xlib::XKeyPressedEvent),
+    KeyRelease(xlib::XKeyReleasedEvent),
+    PointerMotion(xlib::XPointerMovedEvent),
 }
 
 impl From<xlib::XEvent> for Event {
@@ -26,6 +33,11 @@ impl From<xlib::XEvent> for Event {
             xlib::ConfigureRequest => {
                 Self::WindowConfigureRequest(unsafe { event.configure_request })
             }
+            xlib::ButtonPress => Self::ButtonPress(unsafe { event.button }),
+            xlib::ButtonRelease => Self::ButtonRelease(unsafe { event.button }),
+            xlib::KeyPress => Self::KeyPress(unsafe { event.key }),
+            xlib::KeyRelease => Self::KeyRelease(unsafe { event.key }),
+            xlib::MotionNotify => Self::PointerMotion(unsafe { event.motion }),
             _ => Self::Unknown,
         }
     }
@@ -36,17 +48,8 @@ impl From<xlib::XEvent> for Event {
 #[non_exhaustive]
 pub enum Action {
     None,
+
     WindowMove,
     WindowResize,
     WindowClose,
-}
-
-impl From<String> for Action {
-    fn from(action: String) -> Self {
-        match &action[..] {
-            "WindowMove" => Self::WindowMove,
-            "WindowResize" => Self::WindowResize,
-            _ => Self::None,
-        }
-    }
 }
