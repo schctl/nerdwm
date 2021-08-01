@@ -11,6 +11,7 @@ use std::path::Path;
 
 use crate::event;
 use crate::input;
+use crate::layout;
 
 /// Key + Modifiers for a window manager action.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -51,10 +52,9 @@ impl MouseBind {
 /// Window Manager options.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
-    pub border_width: u32,
-    pub border_color: u64,
     pub keybinds: Vec<KeyBind>,
     pub mousebinds: Vec<MouseBind>,
+    pub layout: layout::LayoutConfig,
 }
 
 impl Config {
@@ -63,7 +63,7 @@ impl Config {
         let mut config_string = String::new();
         config_file.read_to_string(&mut config_string).unwrap();
 
-        debug!("Parsed configuration file [{:#?}]", path);
+        debug!("Parsed configuration file [{:#x?}]", path);
 
         serde_json::from_str(&config_string[..]).unwrap()
     }

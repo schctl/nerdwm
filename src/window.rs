@@ -62,6 +62,11 @@ impl Window {
         unsafe { (context.get_raw_context().XUnmapWindow)(context.get_connection(), self.xid) };
     }
 
+    /// Raise the window.
+    pub fn raise(&self, context: &DisplayContext) {
+        unsafe { (context.get_raw_context().XRaiseWindow)(context.get_connection(), self.xid) };
+    }
+
     /// Add or remove window from the save set.
     pub fn set_save_set(&self, context: &DisplayContext, saved: bool) {
         if saved {
