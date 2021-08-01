@@ -5,11 +5,13 @@ use x11_dl::xlib;
 
 use serde::{Deserialize, Serialize};
 
+use crate::client;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
     None,
-    Move,
-    Resize,
+    Move(client::ClientWindow),
+    Resize(client::ClientWindow),
 }
 
 /// Auto implement map.

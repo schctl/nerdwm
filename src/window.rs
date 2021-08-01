@@ -13,7 +13,7 @@ pub struct Window {
 
 impl Window {
     /// Create a new window with the given properties.
-    #[allow(clippy::clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         context: &DisplayContext,
         parent: &Window,
@@ -83,7 +83,7 @@ impl Window {
     }
 
     /// Get list of child windows.
-    pub fn get_windows(&self, context: &DisplayContext) -> Vec<u64> {
+    pub fn get_children(&self, context: &DisplayContext) -> Vec<u64> {
         unsafe {
             let mut returned_root: u64 = std::mem::zeroed();
             let mut returned_parent: u64 = std::mem::zeroed();
@@ -166,6 +166,9 @@ impl Window {
             )
         };
     }
+
+    // /// Change the position of the window relative to its parent.
+    // pub fn move_resize()
 
     /// Send WM_DELETE_WINDOW or forcefully kill client.
     pub fn kill(&self, _context: &DisplayContext) {}

@@ -81,7 +81,7 @@ impl DisplayContext {
     /// Get next input event.
     pub fn get_next_event(&self) -> event::Event {
         unsafe {
-            debug!("{} Pending events", (self.xlib.XPending)(self.display));
+            trace!("{} Pending events", (self.xlib.XPending)(self.display));
 
             let mut raw_event: xlib::XEvent = std::mem::zeroed();
             (self.xlib.XNextEvent)(self.display, &mut raw_event);
@@ -122,11 +122,11 @@ impl DisplayContext {
             // https://tronche.com/gui/x/xlib/input/XGrabButton.html
             (self.xlib.XGrabButton)(
                 self.display,
-                button,                                                   // mouse button
-                modifiers,                                                // modifier mask
-                window.get_xid(),                                         // grab window
-                0,                                                        // owner events
-                (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as u32, // event mask
+                button,           // mouse button
+                modifiers,        // modifier mask
+                window.get_xid(), // grab window
+                0,                // owner events
+                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32, // event mask
                 xlib::GrabModeAsync, // process pointer events without freezing
                 xlib::GrabModeAsync, // process keyboard events without freezing
                 0,                   // confine pointer to window

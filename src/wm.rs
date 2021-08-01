@@ -8,6 +8,7 @@ use crate::client;
 use crate::config;
 use crate::display_context::DisplayContext;
 use crate::event;
+use crate::input;
 use crate::window;
 
 /// Occurs if another WM is running.
@@ -32,6 +33,8 @@ pub struct WindowManager {
     /// Stack of clients.
     /// Order of focus.
     clients: Vec<client::ClientWindow>,
+    mode: input::Mode,
+    previous_mouse_position: (i32, i32),
 }
 
 impl WindowManager {
@@ -61,47 +64,25 @@ impl WindowManager {
             root,
             config,
             clients: vec![],
+            mode: input::Mode::None,
+            previous_mouse_position: (0, 0),
         };
+
+        wm.init_root();
+        wm.context.flush();
 
         // Create handles for existing windows
         wm.context.grab_server();
 
         // Add existing windows to client list
-        for w in root.get_windows(&wm.context) {
+        for w in wm.root.get_children(&wm.context) {
             wm.push_client(w);
-            info!("Found window {:x?}", w);
+            debug!("Found window {:x?}", w);
         }
 
         wm.context.ungrab_server();
 
-        wm.init_root();
-        wm.context.flush();
-
         wm
-    }
-
-    /// Set focus onto one client.
-    fn focus_client(&self, window: &client::ClientWindow) {
-        for bind in &self.config.keybinds {
-            self.context
-                .grab_key(&window.internal, bind.bind.into(), bind.get_mask())
-        }
-
-        for bind in &self.config.mousebinds {
-            self.context
-                .grab_button(&window.internal, bind.bind.into(), bind.get_mask())
-        }
-
-        info!("Focused window.")
-    }
-
-    /// Get currently focused client.
-    fn get_focused_client(&self) -> Option<&client::ClientWindow> {
-        if self.clients.is_empty() {
-            Some(&self.clients[0])
-        } else {
-            None
-        }
     }
 
     /// Configure the root window.
@@ -122,6 +103,25 @@ impl WindowManager {
             xlib::CWCursor | xlib::CWEventMask,
         );
         self.root.set_event_mask(&self.context, root_mask);
+
+        self.grab_binds(&self.root);
+
+        debug!("Initialized root window");
+    }
+
+    /// Grab window management bindings.
+    fn grab_binds(&self, window: &window::Window) {
+        for bind in &self.config.keybinds {
+            self.context
+                .grab_key(&window, bind.bind.into(), bind.get_mask())
+        }
+
+        for bind in &self.config.mousebinds {
+            self.context
+                .grab_button(&window, bind.bind.into(), bind.get_mask())
+        }
+
+        trace!("Grabbed bindings for window: {:x}", window.get_xid());
     }
 
     /// Push a window to the current stack.
@@ -150,10 +150,10 @@ impl WindowManager {
 
         internal.reparent(&self.context, &frame);
         internal.map(&self.context);
+        self.grab_binds(&internal);
 
         let client = client::ClientWindow { internal, frame };
-        self.focus_client(&client);
-        self.clients.insert(0, client);
+        self.clients.push(client);
     }
 
     /// Get client position in stack if it exists.
@@ -163,18 +163,23 @@ impl WindowManager {
             .position(|w| w.internal.get_xid() == xid)
     }
 
+    /// Get client position in stack from frame xid.
+    pub fn get_client_from_frame(&self, xid: u64) -> Option<usize> {
+        self.clients.iter().position(|w| w.frame.get_xid() == xid)
+    }
+
     /// Run the event loop.
     pub fn run(&mut self) {
         loop {
             let event = self.context.get_next_event();
 
-            debug!("Event [{:x?}]", event);
-
-            info!("Clients: [{:?}]", self.clients);
+            trace!("Event [{:x?}]", event);
+            trace!("Clients: [{:x?}]", self.clients);
+            trace!("Mode: {:x?}", self.mode);
 
             match event {
                 // On Window Create
-                event::Event::WindowCreate(e) => info!("Window Created {:x?}", e.window),
+                event::Event::WindowCreate(e) => debug!("Window Created {:x?}", e.window),
                 // Window Properties Change
                 event::Event::WindowConfigureRequest(configure_request) => {
                     let mut changes = xlib::XWindowChanges {
@@ -196,7 +201,7 @@ impl WindowManager {
                             &mut frame_changes,
                             configure_request.value_mask as u32,
                         );
-                        debug!("Configured frame");
+                        trace!("Configured frame");
                     }
 
                     let window = window::Window::from_xid(configure_request.window);
@@ -207,12 +212,14 @@ impl WindowManager {
                         configure_request.value_mask as u32,
                     );
 
-                    info!("Configured window {:x?}", configure_request.window);
+                    debug!("Configured window {:x?}", configure_request.window);
                 }
                 // Window Map Request
                 event::Event::WindowMapRequest(map_request) => {
-                    self.push_client(map_request.window);
-                    info!("Mapped window {:x?}", map_request.window);
+                    if self.get_client(map_request.window).is_none() {
+                        self.push_client(map_request.window)
+                    }
+                    debug!("Mapped window {:x?}", map_request.window);
                 }
                 // On Window Unmap
                 event::Event::WindowUnmap(unmap_event) => {
@@ -223,10 +230,10 @@ impl WindowManager {
                         client.frame.set_save_set(&self.context, false);
                         client.frame.destroy(&self.context);
 
-                        debug!("Destroyed frame");
+                        trace!("Destroyed frame");
                     }
 
-                    info!("Unmapped window {:x?}", unmap_event.window);
+                    debug!("Unmapped window {:x?}", unmap_event.window);
                 }
                 event::Event::WindowDestroy(destroy_event) => {
                     if let Some(pos) = self.get_client(destroy_event.window) {
@@ -235,22 +242,81 @@ impl WindowManager {
                         client.frame.set_save_set(&self.context, false);
                         client.frame.destroy(&self.context);
 
-                        debug!("Destroyed frame");
+                        trace!("Destroyed frame");
                     }
 
-                    info!("Destroyed window {:x?}", destroy_event.window);
+                    debug!("Destroyed window {:x?}", destroy_event.window);
                 }
                 event::Event::ButtonPress(button_press) => {
-                    info!("Button {:x} pressed!", button_press.button);
-                    // Get the window the event occurred on
-                    if let Some(pos) = self.get_client(button_press.window) {
-                        let window = self.clients[pos];
-                        info!("Found event window: {:?}", window);
+                    // Event will happen on the frame
+                    self.previous_mouse_position = (button_press.x_root, button_press.y_root);
+                    if let Some(pos) = self.get_client_from_frame(button_press.subwindow) {
+                        trace!("Got event window at index {}", pos);
+
+                        for bind in &self.config.mousebinds {
+                            if button_press.button == u32::from(bind.bind) {
+                                match bind.action {
+                                    event::Action::WindowMove => {
+                                        self.mode = input::Mode::Move(self.clients[pos])
+                                    }
+                                    event::Action::WindowResize => {
+                                        self.mode = input::Mode::Resize(self.clients[pos])
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                 }
-                event::Event::ButtonRelease(button_release) => {
-                    info!("Button {:x} released!", button_release.button);
+                event::Event::PointerMotion(motion) => {
+                    match self.mode {
+                        input::Mode::Move(client) => {
+                            let properties = client.frame.get_properties(&self.context);
+                            let mut changes = xlib::XWindowChanges {
+                                x: properties.x + (motion.x_root - self.previous_mouse_position.0),
+                                y: properties.y + (motion.y_root - self.previous_mouse_position.1),
+                                width: 0,
+                                height: 0,
+                                border_width: 0,
+                                sibling: 0,
+                                stack_mode: 0,
+                            };
+                            client.frame.configure(
+                                &self.context,
+                                &mut changes,
+                                (xlib::CWX | xlib::CWY) as u32,
+                            );
+                        }
+                        input::Mode::Resize(client) => {
+                            let properties = client.internal.get_properties(&self.context);
+                            let mut changes = xlib::XWindowChanges {
+                                x: 0,
+                                y: 0,
+                                width: properties.width
+                                    + (motion.x_root - self.previous_mouse_position.0),
+                                height: properties.height
+                                    + (motion.y_root - self.previous_mouse_position.1),
+                                border_width: 0,
+                                sibling: 0,
+                                stack_mode: 0,
+                            };
+                            let mut frame_changes = changes.clone();
+                            client.internal.configure(
+                                &self.context,
+                                &mut changes,
+                                (xlib::CWWidth | xlib::CWHeight) as u32,
+                            );
+                            client.frame.configure(
+                                &self.context,
+                                &mut frame_changes,
+                                (xlib::CWWidth | xlib::CWHeight) as u32,
+                            );
+                        }
+                        _ => {}
+                    }
+                    self.previous_mouse_position = (motion.x_root, motion.y_root)
                 }
+                event::Event::ButtonRelease(_button_release) => self.mode = input::Mode::None,
                 _ => {}
             }
         }

@@ -23,7 +23,7 @@ fn setup_logger() {
     );
 
     #[cfg(debug_assertions)]
-    let current_log_level = log::LevelFilter::Debug;
+    let current_log_level = log::LevelFilter::Trace;
 
     #[cfg(not(debug_assertions))]
     let current_log_level = log::LevelFilter::Info;
