@@ -1,10 +1,11 @@
 use log::*;
 
 use nerdwm::config::Config;
-use nerdwm::wm;
+use nerdwm::wm::WindowManager;
 
 /// Configure file logging.
 fn setup_logger() {
+    // ~/.cache/nerdwm
     let xdg_dirs = xdg::BaseDirectories::with_prefix("nerdwm").unwrap();
 
     let mut log_path = xdg_dirs.get_cache_home();
@@ -45,19 +46,23 @@ fn setup_logger() {
 }
 
 fn main() {
+    // ~/.config/nerdwm
     let xdg_dirs = xdg::BaseDirectories::with_prefix("nerdwm").unwrap();
 
     setup_logger();
 
-    let mut config = xdg_dirs.get_config_home();
+    // Read configuration file
+    let config = {
+        let mut config = xdg_dirs.get_config_home();
+        if !config.exists() {
+            std::fs::create_dir_all(&config).unwrap();
+        }
+        config.push("config.json");
 
-    if !config.exists() {
-        std::fs::create_dir_all(&config).unwrap();
-    }
+        Config::new(&config)
+    };
 
-    config.push("config.json");
-
-    let mut wm = wm::WindowManager::new(Config::new(&config));
+    let mut wm = WindowManager::new(config);
     info!("Initialized.");
     wm.run()
 }

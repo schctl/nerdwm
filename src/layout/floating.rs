@@ -1,16 +1,12 @@
-use std::rc::Rc;
-
-use log::*;
-use x11_dl::xlib;
+//! Floating window layout implementation.
+//! Does basically nothing.
 
 use super::*;
-use crate::client::ClientWindow;
-use crate::display_context::DisplayContext;
-use crate::window::Window;
+use crate::workspace::client::ClientWindow;
 
 /// Floating window layout implementation.
 pub struct FloatingLayoutManager {}
 
 impl LayoutManager for FloatingLayoutManager {
-    fn config(&self, _: &Vec<ClientWindow>) {}
+    fn config(&self, _: &[ClientWindow]) {}
 }

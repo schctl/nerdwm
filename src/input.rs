@@ -1,18 +1,8 @@
 //! X input mappings.
 
+use serde::{Deserialize, Serialize};
 use x11_dl::keysym;
 use x11_dl::xlib;
-
-use serde::{Deserialize, Serialize};
-
-use crate::client;
-
-#[derive(Debug, Clone, Copy)]
-pub enum Mode {
-    None,
-    Move(client::ClientWindow),
-    Resize(client::ClientWindow),
-}
 
 /// Auto implement map.
 macro_rules! key_map {

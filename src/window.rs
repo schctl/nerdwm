@@ -1,9 +1,8 @@
 //! X window wrapper.
 
-use log::*;
 use x11_dl::xlib;
 
-use crate::display_context::DisplayContext;
+use crate::context::DisplayContext;
 
 /// Structure and methods containing an X window.
 #[derive(Debug, Clone, Copy)]

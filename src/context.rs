@@ -90,7 +90,7 @@ impl DisplayContext {
     }
 
     /// Create a cursor.
-    /// See cursor definition from https://tronche.com/gui/x/xlib/appendix/b/
+    /// See cursor definition from <https://tronche.com/gui/x/xlib/appendix/b/>
     pub fn get_cursor(&self, cursor: u32) -> u64 {
         unsafe { (self.xlib.XCreateFontCursor)(self.display, cursor) }
     }
@@ -135,7 +135,7 @@ impl DisplayContext {
         };
     }
 
-    //// Release grab on mouse button.
+    /// Release grab on mouse button.
     pub fn ungrab_button(&self, window: &window::Window, button: u32, modifiers: u32) {
         unsafe { (self.xlib.XUngrabButton)(self.display, button, modifiers, window.get_xid()) };
     }

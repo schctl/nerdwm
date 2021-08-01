@@ -1,9 +1,7 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
+#![doc = include_str!("../README.md")]
 
-pub mod client;
 pub mod config;
-pub mod display_context;
+pub mod context;
 pub mod event;
 pub mod input;
 pub mod layout;

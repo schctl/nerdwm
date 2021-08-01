@@ -1,17 +1,13 @@
 //! Window Manager implementation.
 
-use log::*;
-use x11_dl::keysym;
-use x11_dl::xlib;
-
 use std::rc::Rc;
 
-use crate::client;
-use crate::config;
-use crate::display_context::DisplayContext;
-use crate::event;
-use crate::input;
-use crate::layout::floating::FloatingLayoutManager;
+use log::*;
+use x11_dl::xlib;
+
+use crate::config::Config;
+use crate::context::DisplayContext;
+use crate::layout;
 use crate::window::Window;
 use crate::workspace::Workspace;
 
@@ -29,17 +25,17 @@ extern "C" fn on_x_error(_display: *mut xlib::Display, error: *mut xlib::XErrorE
     1
 }
 
-/// Manage windows, their properties, and decorations.
+/// Manage workspaces, and X server connection.
 pub struct WindowManager {
     context: Rc<DisplayContext>,
-    config: config::Config,
-    workspaces: Vec<Workspace>,
+    config: Config,
+    // workspaces: Vec<Workspace>,
     active_workspace: Workspace,
 }
 
 impl WindowManager {
     /// Creates a new window manager, and connection to the X server.
-    pub fn new(config: config::Config) -> Self {
+    pub fn new(config: Config) -> Self {
         let context = Rc::new(DisplayContext::new());
 
         // Startup
@@ -62,12 +58,12 @@ impl WindowManager {
         let mut wm = Self {
             context: context.clone(),
             config: config.clone(),
-            workspaces: vec![],
+            // workspaces: vec![],
             active_workspace: Workspace::new(
                 "main".to_owned(),
-                context.clone(),
-                config.clone(),
-                Box::new(FloatingLayoutManager {}),
+                context,
+                config,
+                Box::new(layout::FloatingLayoutManager {}),
             ),
         };
 
@@ -117,64 +113,16 @@ impl WindowManager {
     fn grab_binds(&self, window: &Window) {
         for bind in &self.config.keybinds {
             self.context
-                .grab_key(&window, bind.bind.into(), bind.get_mask())
+                .grab_key(window, bind.bind.into(), bind.get_mask())
         }
 
         for bind in &self.config.mousebinds {
             self.context
-                .grab_button(&window, bind.bind.into(), bind.get_mask())
+                .grab_button(window, bind.bind.into(), bind.get_mask())
         }
 
         trace!("Grabbed bindings for window: {:x}", window.get_xid());
     }
-
-    // ===================================================
-    //
-    // /// Push a window to the current stack.
-    // fn push_client(&mut self, window: u64) {
-    //     let internal = Window::from_xid(window);
-    //     let properties = internal.get_properties(&self.context);
-    //
-    //     let frame = Window::create(
-    //         &self.context,
-    //         &self.root,
-    //         properties.x,
-    //         properties.y,
-    //         properties.width as u32,
-    //         properties.height as u32,
-    //         self.config.border_width,
-    //         self.config.border_color,
-    //         0x111111,
-    //     );
-    //
-    //     frame.set_event_mask(
-    //         &self.context,
-    //         xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
-    //     );
-    //     frame.set_save_set(&self.context, true);
-    //     frame.map(&self.context);
-    //
-    //     internal.reparent(&self.context, &frame);
-    //     internal.map(&self.context);
-    //     self.grab_binds(&internal);
-    //
-    //     let client = client::ClientWindow { internal, frame };
-    //     self.clients.push(client);
-    // }
-    //
-    // /// Get client position in stack if it exists.
-    // pub fn get_client(&self, xid: u64) -> Option<usize> {
-    //     self.clients
-    //         .iter()
-    //         .position(|w| w.internal.get_xid() == xid)
-    // }
-    //
-    // /// Get client position in stack from frame xid.
-    // pub fn get_client_from_frame(&self, xid: u64) -> Option<usize> {
-    //     self.clients.iter().position(|w| w.frame.get_xid() == xid)
-    // }
-
-    // ===================================================
 
     /// Run the event loop.
     pub fn run(&mut self) {
@@ -183,7 +131,7 @@ impl WindowManager {
 
             trace!("Event [{:x?}]", event);
 
-            self.active_workspace.on_event(event);
+            self.active_workspace.send_event(event);
         }
     }
 }

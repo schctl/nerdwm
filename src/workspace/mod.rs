@@ -1,15 +1,16 @@
+pub mod client;
+
 use std::rc::Rc;
 
 use log::*;
 use x11_dl::xlib;
 
-use crate::client::ClientWindow;
 use crate::config::Config;
-use crate::display_context::DisplayContext;
-use crate::event::{self, Event};
-use crate::input;
+use crate::context::DisplayContext;
+use crate::event;
 use crate::layout;
 use crate::window::Window;
+use client::ClientWindow;
 
 /// Workspace manager.
 pub struct Workspace {
@@ -26,7 +27,7 @@ pub struct Workspace {
     /// Save previous mouse position to calculate deltas
     prev_mouse: (i32, i32),
     /// Input mode
-    mode: input::Mode,
+    mode: event::Mode,
 }
 
 impl Workspace {
@@ -44,42 +45,18 @@ impl Workspace {
             config,
             layout_manager,
             prev_mouse: (0, 0),
-            mode: input::Mode::None,
+            mode: event::Mode::None,
         }
     }
 
     /// Push a window onto the stack.
     pub fn push(&mut self, window: Window) {
-        let properties = window.get_properties(&self.context);
+        let client = ClientWindow::from_window(&self.context, window, &self.config.layout.border);
+        client.frame.map(&self.context);
+        client.frame.raise(&self.context);
+        client.internal.map(&self.context);
+        self.clients.insert(0, client);
 
-        let frame = Window::create(
-            &self.context,
-            &self.context.get_default_root(),
-            properties.x,
-            properties.y,
-            properties.width as u32,
-            properties.height as u32,
-            self.config.layout.border.width,
-            self.config.layout.border.color,
-            0x111111,
-        );
-
-        frame.set_event_mask(
-            &self.context,
-            xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
-        );
-        frame.set_save_set(&self.context, true);
-        frame.map(&self.context);
-        frame.raise(&self.context);
-
-        window.reparent(&self.context, &frame);
-        window.map(&self.context);
-
-        let client = ClientWindow {
-            internal: window,
-            frame,
-        };
-        self.clients.push(client);
         self.layout_manager.config(&self.clients);
     }
 
@@ -96,12 +73,12 @@ impl Workspace {
     }
 
     /// Propagate event to workspace.
-    pub fn on_event(&mut self, event: Event) {
+    pub fn send_event(&mut self, event: event::Event) {
         match event {
             // On Window Create
-            Event::WindowCreate(e) => debug!("Window Created {:x?}", e.window),
+            event::Event::WindowCreate(e) => debug!("Window Created {:x?}", e.window),
             // Window Properties Change
-            Event::WindowConfigureRequest(configure_request) => {
+            event::Event::WindowConfigureRequest(configure_request) => {
                 let mut changes = xlib::XWindowChanges {
                     x: configure_request.x,
                     y: configure_request.y,
@@ -135,41 +112,28 @@ impl Workspace {
                 debug!("Configured window {:x?}", configure_request.window);
             }
             // Window Map Request
-            Event::WindowMapRequest(map_request) => {
+            event::Event::WindowMapRequest(map_request) => {
                 if self.get_client(map_request.window).is_none() {
                     self.push(Window::from_xid(map_request.window))
                 }
                 debug!("Mapped window {:x?}", map_request.window);
             }
             // On Window Unmap
-            Event::WindowUnmap(unmap_event) => {
+            event::Event::WindowUnmap(unmap_event) => {
                 if let Some(pos) = self.get_client(unmap_event.window) {
-                    let client = self.clients.remove(pos);
-                    client.frame.unmap(&self.context);
-                    client
-                        .internal
-                        .reparent(&self.context, &self.context.get_default_root());
-                    client.frame.set_save_set(&self.context, false);
-                    client.frame.destroy(&self.context);
-
+                    self.clients.remove(pos).destroy(&self.context, true);
                     trace!("Destroyed frame");
                 }
-
                 debug!("Unmapped window {:x?}", unmap_event.window);
             }
-            Event::WindowDestroy(destroy_event) => {
+            event::Event::WindowDestroy(destroy_event) => {
                 if let Some(pos) = self.get_client(destroy_event.window) {
-                    let client = self.clients.remove(pos);
-                    client.frame.unmap(&self.context);
-                    client.frame.set_save_set(&self.context, false);
-                    client.frame.destroy(&self.context);
-
+                    self.clients.remove(pos).destroy(&self.context, false);
                     trace!("Destroyed frame");
                 }
-
                 debug!("Destroyed window {:x?}", destroy_event.window);
             }
-            Event::ButtonPress(button_press) => {
+            event::Event::ButtonPress(button_press) => {
                 // Event will happen on the frame
                 self.prev_mouse = (button_press.x_root, button_press.y_root);
                 if let Some(pos) = self.get_client_from_frame(button_press.subwindow) {
@@ -179,20 +143,22 @@ impl Workspace {
                         if button_press.button == u32::from(bind.bind) {
                             match bind.action {
                                 event::Action::WindowMove => {
-                                    self.mode = input::Mode::Move(self.clients[pos])
+                                    self.mode = event::Mode::Move(self.clients[pos])
                                 }
                                 event::Action::WindowResize => {
-                                    self.mode = input::Mode::Resize(self.clients[pos])
+                                    self.mode = event::Mode::Resize(self.clients[pos])
                                 }
                                 _ => {}
                             }
                         }
                     }
+
+                    self.clients[pos].frame.raise(&self.context);
                 }
             }
-            Event::PointerMotion(motion) => {
+            event::Event::PointerMotion(motion) => {
                 match self.mode {
-                    input::Mode::Move(client) => {
+                    event::Mode::Move(client) => {
                         let properties = client.frame.get_properties(&self.context);
                         let mut changes = xlib::XWindowChanges {
                             x: properties.x + (motion.x_root - self.prev_mouse.0),
@@ -209,7 +175,7 @@ impl Workspace {
                             (xlib::CWX | xlib::CWY) as u32,
                         );
                     }
-                    input::Mode::Resize(client) => {
+                    event::Mode::Resize(client) => {
                         let properties = client.internal.get_properties(&self.context);
                         let mut changes = xlib::XWindowChanges {
                             x: 0,
@@ -220,7 +186,7 @@ impl Workspace {
                             sibling: 0,
                             stack_mode: 0,
                         };
-                        let mut frame_changes = changes.clone();
+                        let mut frame_changes = changes;
                         client.internal.configure(
                             &self.context,
                             &mut changes,
@@ -236,7 +202,7 @@ impl Workspace {
                 }
                 self.prev_mouse = (motion.x_root, motion.y_root)
             }
-            Event::ButtonRelease(_button_release) => self.mode = input::Mode::None,
+            event::Event::ButtonRelease(_button_release) => self.mode = event::Mode::None,
             _ => {}
         }
     }

@@ -1,13 +1,10 @@
 //! Window manager configurations.
 
-use log::*;
-use x11_dl::keysym;
-use x11_dl::xlib;
-
-use serde::{Deserialize, Serialize};
-
-use std::io::Read;
+use std::io::prelude::*;
 use std::path::Path;
+
+use log::*;
+use serde::{Deserialize, Serialize};
 
 use crate::event;
 use crate::input;
@@ -22,6 +19,7 @@ pub struct KeyBind {
 }
 
 impl KeyBind {
+    /// Get the modifier mask for this binding.
     pub fn get_mask(&self) -> u32 {
         let mut mask = 0;
         for modifier in &self.modifiers {
@@ -52,8 +50,11 @@ impl MouseBind {
 /// Window Manager options.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
+    /// Keyboard key bindings.
     pub keybinds: Vec<KeyBind>,
+    /// Mouse button bindings.
     pub mousebinds: Vec<MouseBind>,
+    /// Layout information.
     pub layout: layout::LayoutConfig,
 }
 
