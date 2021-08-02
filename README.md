@@ -4,6 +4,8 @@ NerdWM is a simple X11 window manager. This is just a small side project I am wo
 
 Contributions are welcome but the primary goal of this project at the moment is learning.
 
+<img src="res/generic.png" />
+
 ## Features I will eventually try to add
 
 - Workspaces

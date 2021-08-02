@@ -7,9 +7,8 @@ use x11_dl::xlib;
 
 use crate::config::Config;
 use crate::context::DisplayContext;
-use crate::layout;
 use crate::window::Window;
-use crate::workspace::Workspace;
+use crate::workspace::{Workspace, layout};
 
 /// Occurs if another WM is running.
 extern "C" fn on_startup_error(_display: *mut xlib::Display, error: *mut xlib::XErrorEvent) -> i32 {

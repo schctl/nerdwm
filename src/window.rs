@@ -158,6 +158,24 @@ impl Window {
         };
     }
 
+    /// Change the border width.
+    pub fn set_border_width(&self, context: &DisplayContext, width: u32) {
+        unsafe {
+            (context.get_raw_context().XSetWindowBorderWidth)(
+                context.get_connection(),
+                self.xid,
+                width,
+            )
+        };
+    }
+
+    /// Change the border color.
+    pub fn set_border_color(&self, context: &DisplayContext, color: u64) {
+        unsafe {
+            (context.get_raw_context().XSetWindowBorder)(context.get_connection(), self.xid, color)
+        };
+    }
+
     /// Reparent the window to another window.
     pub fn reparent(&self, context: &DisplayContext, parent: &Window) {
         unsafe {

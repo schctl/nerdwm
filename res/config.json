@@ -1,0 +1,38 @@
+{
+    "keybinds": [
+        {
+            "action": "WindowClose",
+            "bind": "Q",
+            "modifiers": [
+                "Mod4", "Shift"
+            ]
+        }
+    ],
+    "mousebinds": [
+        {
+            "action": "WindowMove",
+            "bind": "Left",
+            "modifiers": [
+                "Mod4"
+            ]
+        },
+        {
+            "action": "WindowResize",
+            "bind": "Right",
+            "modifiers": [
+                "Mod4"
+            ]
+        }
+    ],
+    "layout": {
+        "gap_size": 2,
+        "border": {
+            "width": 5,
+            "color": 16777215
+        },
+        "border_unfocused": {
+            "width": 5,
+            "color": 0
+        }
+    }
+}

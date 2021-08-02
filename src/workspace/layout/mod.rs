@@ -32,6 +32,6 @@ pub struct LayoutConfig {
 
 /// Manage window position and sizes.
 pub trait LayoutManager {
-    /// Push a window to the stack.
+    /// Configure the stack of windows.
     fn config(&self, windows: &[ClientWindow]);
 }

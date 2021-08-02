@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use log::*;
 
 use nerdwm::config::Config;
@@ -54,10 +56,15 @@ fn main() {
     // Read configuration file
     let config = {
         let mut config = xdg_dirs.get_config_home();
-        if !config.exists() {
-            std::fs::create_dir_all(&config).unwrap();
-        }
         config.push("config.json");
+
+        // Generate default config file
+        if !config.exists() {
+            let default_config = include_str!("../../res/config.json");
+            std::fs::create_dir_all(&config.parent().unwrap()).unwrap();
+            let mut file = std::fs::File::create(&config).unwrap();
+            file.write_all(default_config.as_bytes()).unwrap();
+        }
 
         Config::new(&config)
     };

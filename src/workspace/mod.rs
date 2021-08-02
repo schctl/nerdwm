@@ -1,4 +1,7 @@
+//! Workspace management utilities.
+
 pub mod client;
+pub mod layout;
 
 use std::rc::Rc;
 
@@ -8,7 +11,6 @@ use x11_dl::xlib;
 use crate::config::Config;
 use crate::context::DisplayContext;
 use crate::event;
-use crate::layout;
 use crate::window::Window;
 use client::ClientWindow;
 
@@ -53,11 +55,18 @@ impl Workspace {
     pub fn push(&mut self, window: Window) {
         let client = ClientWindow::from_window(&self.context, window, &self.config.layout.border);
         client.frame.map(&self.context);
-        client.frame.raise(&self.context);
         client.internal.map(&self.context);
-        self.clients.insert(0, client);
+        self.focus_update(client);
 
         self.layout_manager.config(&self.clients);
+    }
+
+    /// Delete a window from the stack.
+    pub fn pop(&mut self, index: usize) -> Window {
+        let client = self.clients.remove(index);
+        let new_focused = self.clients.remove(0);
+        self.focus_update(new_focused);
+        client.destroy(&self.context, false)
     }
 
     /// Get client position in stack if it exists.
@@ -70,6 +79,37 @@ impl Workspace {
     /// Get client position in stack from frame xid.
     fn get_client_from_frame(&self, xid: u64) -> Option<usize> {
         self.clients.iter().position(|w| w.frame.get_xid() == xid)
+    }
+
+    /// Focus first window in the stack, and set attributes.
+    fn focus_update(&mut self, client: ClientWindow) {
+        client.frame.raise(&self.context);
+        client
+            .frame
+            .set_border_width(&self.context, self.config.layout.border.width);
+        client
+            .frame
+            .set_border_color(&self.context, self.config.layout.border.color);
+
+        // Push the client to the front of the stack
+        self.clients.insert(0, client);
+
+        // Unfocus previously focused window
+        if self.clients.len() > 1 {
+            self.unfocus_update(1);
+        }
+    }
+
+    /// Update unfocused window attributes.
+    fn unfocus_update(&self, index: usize) {
+        if self.clients.len() == index + 1 {
+            self.clients[index]
+                .frame
+                .set_border_width(&self.context, self.config.layout.border_unfocused.width);
+            self.clients[index]
+                .frame
+                .set_border_color(&self.context, self.config.layout.border_unfocused.color);
+        }
     }
 
     /// Propagate event to workspace.
@@ -153,7 +193,8 @@ impl Workspace {
                         }
                     }
 
-                    self.clients[pos].frame.raise(&self.context);
+                    let client = self.clients.remove(pos);
+                    self.focus_update(client);
                 }
             }
             event::Event::PointerMotion(motion) => {

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event;
 use crate::input;
-use crate::layout;
+use crate::workspace::layout;
 
 /// Key + Modifiers for a window manager action.
 #[derive(Debug, Clone, Deserialize, Serialize)]
