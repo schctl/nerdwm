@@ -4,16 +4,15 @@ use std::io::prelude::*;
 use std::path::Path;
 
 use log::*;
+use nerdwm_x11::input;
 use serde::{Deserialize, Serialize};
 
-use crate::event;
-use crate::input;
-use crate::workspace::layout;
+use crate::workspace::{self, layout};
 
 /// Key + Modifiers for a window manager action.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KeyBind {
-    pub action: event::Action,
+    pub action: workspace::Action,
     pub bind: input::Key,
     pub modifiers: Vec<input::ModifierMask>,
 }
@@ -32,7 +31,7 @@ impl KeyBind {
 /// Button + Modifiers for a window manager action.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MouseBind {
-    pub action: event::Action,
+    pub action: workspace::Action,
     pub bind: input::Button,
     pub modifiers: Vec<input::ModifierMask>,
 }

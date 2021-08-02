@@ -6,13 +6,36 @@ pub mod layout;
 use std::rc::Rc;
 
 use log::*;
-use x11_dl::xlib;
+use nerdwm_x11::context::DisplayContext;
+use nerdwm_x11::event;
+use nerdwm_x11::window::Window;
+use nerdwm_x11::xlib;
+use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::context::DisplayContext;
-use crate::event;
-use crate::window::Window;
 use client::ClientWindow;
+
+/// Current state of inputs.
+#[derive(Debug, Clone, Copy)]
+pub enum Mode {
+    /// Regular mode.
+    None,
+    /// Actions affect window position.
+    Move(ClientWindow),
+    /// Actions affect window size.
+    Resize(ClientWindow),
+}
+
+/// WM actions.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Action {
+    None,
+
+    WindowMove,
+    WindowResize,
+    WindowClose,
+}
 
 /// Workspace manager.
 pub struct Workspace {
@@ -29,7 +52,7 @@ pub struct Workspace {
     /// Save previous mouse position to calculate deltas
     prev_mouse: (i32, i32),
     /// Input mode
-    mode: event::Mode,
+    mode: Mode,
 }
 
 impl Workspace {
@@ -47,7 +70,7 @@ impl Workspace {
             config,
             layout_manager,
             prev_mouse: (0, 0),
-            mode: event::Mode::None,
+            mode: Mode::None,
         }
     }
 
@@ -182,12 +205,8 @@ impl Workspace {
                     for bind in &self.config.mousebinds {
                         if button_press.button == u32::from(bind.bind) {
                             match bind.action {
-                                event::Action::WindowMove => {
-                                    self.mode = event::Mode::Move(self.clients[pos])
-                                }
-                                event::Action::WindowResize => {
-                                    self.mode = event::Mode::Resize(self.clients[pos])
-                                }
+                                Action::WindowMove => self.mode = Mode::Move(self.clients[pos]),
+                                Action::WindowResize => self.mode = Mode::Resize(self.clients[pos]),
                                 _ => {}
                             }
                         }
@@ -199,7 +218,7 @@ impl Workspace {
             }
             event::Event::PointerMotion(motion) => {
                 match self.mode {
-                    event::Mode::Move(client) => {
+                    Mode::Move(client) => {
                         let properties = client.frame.get_properties(&self.context);
                         let mut changes = xlib::XWindowChanges {
                             x: properties.x + (motion.x_root - self.prev_mouse.0),
@@ -216,7 +235,7 @@ impl Workspace {
                             (xlib::CWX | xlib::CWY) as u32,
                         );
                     }
-                    event::Mode::Resize(client) => {
+                    Mode::Resize(client) => {
                         let properties = client.internal.get_properties(&self.context);
                         let mut changes = xlib::XWindowChanges {
                             x: 0,
@@ -243,7 +262,7 @@ impl Workspace {
                 }
                 self.prev_mouse = (motion.x_root, motion.y_root)
             }
-            event::Event::ButtonRelease(_button_release) => self.mode = event::Mode::None,
+            event::Event::ButtonRelease(_button_release) => self.mode = Mode::None,
             _ => {}
         }
     }

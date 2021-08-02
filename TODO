@@ -1,2 +1,2 @@
-# More specific TODOs
+ - Replace xlib with xcb
  - Button events without mod mask

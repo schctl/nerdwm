@@ -1,9 +1,15 @@
+#![doc = include_str!("../README.md")]
+
+pub mod config;
+pub mod wm;
+pub mod workspace;
+
 use std::io::Write;
 
 use log::*;
 
-use nerdwm::config::Config;
-use nerdwm::wm::WindowManager;
+use crate::config::Config;
+use crate::wm::WindowManager;
 
 /// Configure file logging.
 fn setup_logger() {
@@ -60,7 +66,7 @@ fn main() {
 
         // Generate default config file
         if !config.exists() {
-            let default_config = include_str!("../../res/config.json");
+            let default_config = include_str!("../res/config.json");
             std::fs::create_dir_all(&config.parent().unwrap()).unwrap();
             let mut file = std::fs::File::create(&config).unwrap();
             file.write_all(default_config.as_bytes()).unwrap();

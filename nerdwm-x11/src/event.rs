@@ -1,31 +1,6 @@
 //! X Event wrapper.
 
-use serde::{Deserialize, Serialize};
 use x11_dl::xlib;
-
-use crate::workspace::client::ClientWindow;
-
-/// Current state of inputs.
-#[derive(Debug, Clone, Copy)]
-pub enum Mode {
-    /// Regular mode.
-    None,
-    /// Actions affect window position.
-    Move(ClientWindow),
-    /// Actions affect window size.
-    Resize(ClientWindow),
-}
-
-/// WM actions.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[non_exhaustive]
-pub enum Action {
-    None,
-
-    WindowMove,
-    WindowResize,
-    WindowClose,
-}
 
 /// X events.
 #[derive(Debug, Clone, Copy)]

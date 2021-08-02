@@ -1,10 +1,10 @@
 //! Window Manager client utilities.
 
-use x11_dl::xlib;
+use nerdwm_x11::context::DisplayContext;
+use nerdwm_x11::window::Window;
+use nerdwm_x11::xlib;
 
 use super::layout::BorderConfig;
-use crate::context::DisplayContext;
-use crate::window::Window;
 
 /// Client window and decorations.
 #[derive(Debug, Clone, Copy)]
