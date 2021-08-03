@@ -1,4 +1,4 @@
 xclock &
 xeyes &
 
-exec ../../target/debug/nerdwm
+exec target/debug/nerdwm

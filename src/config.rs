@@ -5,6 +5,7 @@ use std::path::Path;
 
 use log::*;
 use nerdwm_x11::input;
+use nerdwm_x11::xlib;
 use serde::{Deserialize, Serialize};
 
 use crate::workspace::{self, layout};
@@ -38,7 +39,7 @@ pub struct MouseBind {
 
 impl MouseBind {
     pub fn get_mask(&self) -> u32 {
-        let mut mask = 0;
+        let mut mask = xlib::NoEventMask as u32;
         for modifier in &self.modifiers {
             mask |= u32::from(*modifier);
         }

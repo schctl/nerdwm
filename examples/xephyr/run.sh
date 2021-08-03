@@ -1,6 +1,7 @@
 XEPHYR=$(which Xephyr)
+ABS_PATH=$(dirname $(realpath $0))
 
-xinit ./xinitrc -- \
+xinit $ABS_PATH/xinitrc -- \
     "$XEPHYR" \
         :100 \
         -ac \

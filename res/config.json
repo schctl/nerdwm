@@ -4,23 +4,28 @@
             "action": "WindowClose",
             "bind": "Q",
             "modifiers": [
-                "Mod4", "Shift"
+                "Mod1", "Shift"
             ]
         }
     ],
     "mousebinds": [
         {
+            "action": "WindowFocus",
+            "bind": "Left",
+            "modifiers": []
+        },
+        {
             "action": "WindowMove",
             "bind": "Left",
             "modifiers": [
-                "Mod4"
+                "Mod1"
             ]
         },
         {
             "action": "WindowResize",
             "bind": "Right",
             "modifiers": [
-                "Mod4"
+                "Mod1"
             ]
         }
     ],

@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use log::*;
 use nerdwm_x11::context::DisplayContext;
+use nerdwm_x11::event;
 use nerdwm_x11::window::Window;
 use nerdwm_x11::xlib;
 
@@ -130,7 +131,22 @@ impl WindowManager {
 
             trace!("Event [{:x?}]", event);
 
-            self.active_workspace.send_event(event);
+            // ignore events we don't care about
+            match event {
+                // handle these events - binds
+                event::Event::ButtonPress(e) => self.active_workspace.on_button_press(e),
+                event::Event::ButtonRelease(e) => self.active_workspace.on_button_release(e),
+                // and let the active workspace handle the rest
+                event::Event::WindowCreate(e) => self.active_workspace.on_window_create(e),
+                event::Event::WindowConfigureRequest(e) => {
+                    self.active_workspace.window_configure_request(e)
+                }
+                event::Event::WindowMapRequest(e) => self.active_workspace.window_map_request(e),
+                event::Event::WindowUnmap(e) => self.active_workspace.on_window_unmap(e),
+                event::Event::WindowDestroy(e) => self.active_workspace.on_window_destroy(e),
+                event::Event::PointerMotion(e) => self.active_workspace.on_pointer_move(e),
+                _ => {}
+            }
         }
     }
 }

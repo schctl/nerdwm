@@ -2,7 +2,6 @@
 
 use nerdwm_x11::context::DisplayContext;
 use nerdwm_x11::window::Window;
-use nerdwm_x11::xlib;
 
 use super::layout::BorderConfig;
 
@@ -32,10 +31,6 @@ impl ClientWindow {
             0x0011_1111,
         );
 
-        frame.set_event_mask(
-            context,
-            xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
-        );
         frame.set_save_set(context, true);
         window.reparent(context, &frame);
 

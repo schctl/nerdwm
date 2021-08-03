@@ -73,11 +73,6 @@ impl DisplayContext {
         unsafe { (self.xlib.XSync)(self.display, xlib::False) };
     }
 
-    /// Set the input event mask for a window.
-    pub fn set_event_mask(&self, window: u64, mask: i64) {
-        unsafe { (self.xlib.XSelectInput)(self.display, window, mask) };
-    }
-
     /// Get next input event.
     pub fn get_next_event(&self) -> event::Event {
         unsafe {
