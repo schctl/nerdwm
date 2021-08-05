@@ -6,8 +6,6 @@ pub mod workspace;
 
 use std::io::Write;
 
-use log::*;
-
 use crate::config::Config;
 use crate::wm::WindowManager;
 
@@ -75,7 +73,5 @@ fn main() {
         Config::new(&config)
     };
 
-    let mut wm = WindowManager::new(config);
-    info!("Initialized.");
-    wm.run()
+    WindowManager::new(config).run();
 }

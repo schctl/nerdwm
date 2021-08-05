@@ -4,32 +4,17 @@ use std::rc::Rc;
 
 use log::*;
 use nerdwm_x11::context::DisplayContext;
-use nerdwm_x11::event;
 use nerdwm_x11::window::Window;
-use nerdwm_x11::xlib;
+use nerdwm_x11::xcb;
+use nerdwm_x11::{event, input};
 
 use crate::config::Config;
 use crate::workspace::{layout, Workspace};
-
-/// Occurs if another WM is running.
-extern "C" fn on_startup_error(_display: *mut xlib::Display, error: *mut xlib::XErrorEvent) -> i32 {
-    let error = unsafe { *error };
-    error!("X Error [{}] - {}", error.type_, error.error_code);
-    std::process::exit(-1);
-}
-
-/// Occurs when the X server raises an error.
-extern "C" fn on_x_error(_display: *mut xlib::Display, error: *mut xlib::XErrorEvent) -> i32 {
-    let error = unsafe { *error };
-    error!("X Error [{}] - {}", error.type_, error.error_code);
-    1
-}
 
 /// Manage workspaces, and X server connection.
 pub struct WindowManager {
     context: Rc<DisplayContext>,
     config: Config,
-    // workspaces: Vec<Workspace>,
     active_workspace: Workspace,
 }
 
@@ -42,17 +27,15 @@ impl WindowManager {
         let root = context.get_default_root();
 
         // WM check
-        context.set_error_callback(Some(on_startup_error));
 
         // Inputs for root window.
         // Substructure redirection allows the WM to intercept
         // these events and handle them on its own.
         root.set_event_mask(
             &context,
-            xlib::SubstructureRedirectMask | xlib::SubstructureNotifyMask,
+            xcb::EVENT_MASK_SUBSTRUCTURE_REDIRECT | xcb::EVENT_MASK_SUBSTRUCTURE_NOTIFY,
         );
 
-        context.set_error_callback(Some(on_x_error));
         context.flush();
 
         let mut wm = Self {
@@ -68,18 +51,28 @@ impl WindowManager {
         };
 
         wm.init_root();
-        wm.context.flush();
 
         // Create handles for existing windows
         wm.context.grab_server();
 
         // Add existing windows to client list
-        for w in wm.context.get_default_root().get_children(&wm.context) {
-            wm.active_workspace.push(Window::from_xid(w));
+        for w in wm
+            .context
+            .get_default_root()
+            .get_tree(&wm.context)
+            .get_reply()
+            .unwrap()
+            .children()
+            .iter()
+            .map(|w| Window::from_xid(*w))
+        {
+            wm.active_workspace.push(w);
             debug!("Found window {:x?}", w);
         }
 
         wm.context.ungrab_server();
+
+        info!("Initialized");
 
         wm
     }
@@ -87,23 +80,20 @@ impl WindowManager {
     /// Configure the root window.
     fn init_root(&self) {
         let root = self.context.get_default_root();
-        let root_mask = xlib::SubstructureRedirectMask
-            | xlib::SubstructureNotifyMask
-            | xlib::ButtonPressMask
-            | xlib::ButtonReleaseMask
-            | xlib::PointerMotionMask;
+        let root_mask = xcb::EVENT_MASK_SUBSTRUCTURE_REDIRECT
+            | xcb::EVENT_MASK_SUBSTRUCTURE_NOTIFY
+            | xcb::EVENT_MASK_BUTTON_PRESS
+            | xcb::EVENT_MASK_BUTTON_RELEASE
+            | xcb::EVENT_MASK_POINTER_MOTION
+            | xcb::EVENT_MASK_PROPERTY_CHANGE;
 
-        let mut properties: xlib::XSetWindowAttributes = unsafe { std::mem::zeroed() };
-        properties.cursor = self.context.get_cursor(68);
-        properties.event_mask = root_mask;
+        let cursor = self.context.get_cursor(68);
 
-        root.set_properties(
-            &self.context,
-            &mut properties,
-            xlib::CWCursor | xlib::CWEventMask,
-        );
+        root.set_attribute(&self.context, &[(xcb::CW_CURSOR, cursor)]);
         root.set_event_mask(&self.context, root_mask);
 
+        self.context
+            .ungrab_key(&root, xcb::GRAB_ANY, input::ModifierMask::Any as u16);
         self.grab_binds(&root);
 
         debug!("Initialized root window");
@@ -113,13 +103,17 @@ impl WindowManager {
     fn grab_binds(&self, window: &Window) {
         for bind in &self.config.keybinds {
             self.context
-                .grab_key(window, bind.bind.into(), bind.get_mask())
+                .grab_key(window, bind.bind as u32, bind.get_mask() as u16);
         }
+
+        self.context.flush();
 
         for bind in &self.config.mousebinds {
             self.context
-                .grab_button(window, bind.bind.into(), bind.get_mask())
+                .grab_button(window, bind.bind as u8, bind.get_mask() as u16);
         }
+
+        self.context.flush();
 
         trace!("Grabbed bindings for window: {:x}", window.get_xid());
     }
@@ -127,24 +121,24 @@ impl WindowManager {
     /// Run the event loop.
     pub fn run(&mut self) {
         loop {
-            let event = self.context.get_next_event();
+            self.context.flush();
 
-            trace!("Event [{:x?}]", event);
+            let event = self.context.get_next_event();
 
             // ignore events we don't care about
             match event {
                 // handle these events - binds
-                event::Event::ButtonPress(e) => self.active_workspace.on_button_press(e),
-                event::Event::ButtonRelease(e) => self.active_workspace.on_button_release(e),
+                event::Event::ButtonPress(e) => self.active_workspace.on_button_press(&e),
+                event::Event::ButtonRelease(e) => self.active_workspace.on_button_release(&e),
                 // and let the active workspace handle the rest
-                event::Event::WindowCreate(e) => self.active_workspace.on_window_create(e),
+                event::Event::WindowCreate(e) => self.active_workspace.on_window_create(&e),
                 event::Event::WindowConfigureRequest(e) => {
-                    self.active_workspace.window_configure_request(e)
+                    self.active_workspace.window_configure_request(&e);
                 }
-                event::Event::WindowMapRequest(e) => self.active_workspace.window_map_request(e),
-                event::Event::WindowUnmap(e) => self.active_workspace.on_window_unmap(e),
-                event::Event::WindowDestroy(e) => self.active_workspace.on_window_destroy(e),
-                event::Event::PointerMotion(e) => self.active_workspace.on_pointer_move(e),
+                event::Event::WindowMapRequest(e) => self.active_workspace.window_map_request(&e),
+                event::Event::WindowUnmap(e) => self.active_workspace.on_window_unmap(&e),
+                event::Event::WindowDestroy(e) => self.active_workspace.on_window_destroy(&e),
+                event::Event::PointerMotion(e) => self.active_workspace.on_pointer_move(&e),
                 _ => {}
             }
         }

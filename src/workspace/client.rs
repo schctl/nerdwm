@@ -17,18 +17,16 @@ pub struct ClientWindow {
 impl ClientWindow {
     /// Create a frame for an already existing X window.
     pub fn from_window(context: &DisplayContext, window: Window, border: &BorderConfig) -> Self {
-        let properties = window.get_properties(context);
+        let geometry = window.get_geometry(context).get_reply().unwrap();
 
         let frame = Window::create(
             context,
             &context.get_default_root(),
-            properties.x,
-            properties.y,
-            properties.width as u32,
-            properties.height as u32,
-            border.width,
-            border.color,
-            0x0011_1111,
+            geometry.x(),
+            geometry.y(),
+            geometry.width(),
+            geometry.height(),
+            border.width as u16,
         );
 
         frame.set_save_set(context, true);

@@ -16,7 +16,7 @@ pub struct BorderConfig {
     /// Border width.
     pub width: u32,
     /// Border color for the focused window.
-    pub color: u64,
+    pub color: u32,
 }
 
 /// Layout configuration.

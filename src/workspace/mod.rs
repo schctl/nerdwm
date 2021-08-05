@@ -8,13 +8,16 @@ use std::rc::Rc;
 use log::*;
 use nerdwm_x11::context::DisplayContext;
 use nerdwm_x11::window::Window;
-use nerdwm_x11::xlib;
+use nerdwm_x11::xcb;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use client::ClientWindow;
 
+// TODO: collapse mode and action?
+
 /// Current state of inputs.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
     /// Regular mode.
@@ -50,7 +53,7 @@ pub struct Workspace {
     /// Layout manager
     layout_manager: Box<dyn layout::LayoutManager>,
     /// Save previous mouse position to calculate deltas
-    prev_mouse: (i32, i32),
+    prev_mouse: (i16, i16),
     /// Input mode
     mode: Mode,
 }
@@ -93,14 +96,14 @@ impl Workspace {
     }
 
     /// Get client position in stack if it exists.
-    fn get_client(&self, xid: u64) -> Option<usize> {
+    fn get_client(&self, xid: u32) -> Option<usize> {
         self.clients
             .iter()
             .position(|w| w.internal.get_xid() == xid)
     }
 
     /// Get client position in stack from frame xid.
-    fn get_client_from_frame(&self, xid: u64) -> Option<usize> {
+    fn get_client_from_frame(&self, xid: u32) -> Option<usize> {
         self.clients.iter().position(|w| w.frame.get_xid() == xid)
     }
 
@@ -138,71 +141,69 @@ impl Workspace {
     // Specific event handlers
     // -----------------------
 
-    pub fn on_window_create(&mut self, event: xlib::XCreateWindowEvent) {
-        debug!("Window Created {:x?}", event.window);
+    pub fn on_window_create(&mut self, event: &xcb::CreateNotifyEvent) {
+        trace!("Window Created {:x?}", unsafe { (*event.ptr).window });
     }
 
-    pub fn on_window_destroy(&mut self, event: xlib::XDestroyWindowEvent) {
-        if let Some(pos) = self.get_client(event.window) {
-            self.clients.remove(pos).destroy(&self.context, false);
-            trace!("Destroyed frame");
+    pub fn on_window_destroy(&mut self, event: &xcb::DestroyNotifyEvent) {
+        if let Some(pos) = self.get_client(unsafe { (*event.ptr).window }) {
+            let win = self.clients.remove(pos).destroy(&self.context, false);
+            trace!("Destroyed window {:x?}", win.get_xid());
         }
-        debug!("Destroyed window {:x?}", event.window);
     }
 
-    pub fn window_configure_request(&mut self, event: xlib::XConfigureRequestEvent) {
-        let mut changes = xlib::XWindowChanges {
-            x: event.x,
-            y: event.y,
-            width: event.width,
-            height: event.height,
-            border_width: event.border_width,
-            sibling: event.above,
-            stack_mode: event.detail,
-        };
+    pub fn window_configure_request(&mut self, event: &xcb::ConfigureRequestEvent) {
+        let changes: [(u16, u32); 7] = [
+            (xcb::CONFIG_WINDOW_X as u16, event.x() as u32),
+            (xcb::CONFIG_WINDOW_Y as u16, event.y() as u32),
+            (xcb::CONFIG_WINDOW_WIDTH as u16, event.width() as u32),
+            (xcb::CONFIG_WINDOW_HEIGHT as u16, event.height() as u32),
+            (
+                xcb::CONFIG_WINDOW_STACK_MODE as u16,
+                event.stack_mode() as u32,
+            ),
+            (xcb::CONFIG_WINDOW_SIBLING as u16, event.sibling() as u32),
+            (
+                xcb::CONFIG_WINDOW_BORDER_WIDTH as u16,
+                event.border_width() as u32,
+            ),
+        ];
 
         // If a window exists, reconfigure its frame as well to accommodate resizing/etc.
-        if let Some(pos) = self.get_client(event.window) {
+        if let Some(pos) = self.get_client(event.window()) {
             let window = self.clients[pos];
-            let mut frame_changes = changes;
-            window
-                .frame
-                .configure(&self.context, &mut frame_changes, event.value_mask as u32);
+            window.frame.configure(&self.context, &changes);
             trace!("Configured frame");
         }
 
-        let window = Window::from_xid(event.window);
+        let window = Window::from_xid(event.window());
 
-        window.configure(&self.context, &mut changes, event.value_mask as u32);
+        window.configure(&self.context, &changes);
 
-        debug!("Configured window {:x?}", event.window);
+        trace!("Configured window {:x?}", event.window());
     }
 
-    pub fn window_map_request(&mut self, event: xlib::XMapRequestEvent) {
-        if self.get_client(event.window).is_none() {
-            self.push(Window::from_xid(event.window))
+    pub fn window_map_request(&mut self, event: &xcb::MapRequestEvent) {
+        if self.get_client(event.window()).is_none() {
+            self.push(Window::from_xid(event.window()));
         }
-        debug!("Mapped window {:x?}", event.window);
+        trace!("Mapped window {:x?}", event.window());
     }
 
-    pub fn on_window_unmap(&mut self, event: xlib::XUnmapEvent) {
-        if let Some(pos) = self.get_client(event.window) {
+    pub fn on_window_unmap(&mut self, event: &xcb::UnmapNotifyEvent) {
+        if let Some(pos) = self.get_client(event.window()) {
             self.clients.remove(pos).destroy(&self.context, true);
             trace!("Destroyed frame");
         }
-        debug!("Unmapped window {:x?}", event.window);
+        trace!("Unmapped window {:x?}", event.window());
     }
 
-    pub fn on_button_press(&mut self, event: xlib::XButtonPressedEvent) {
+    pub fn on_button_press(&mut self, event: &xcb::ButtonPressEvent) {
         // Event will happen on the frame
-        self.prev_mouse = (event.x_root, event.y_root);
-        if let Some(pos) = self.get_client_from_frame(event.subwindow) {
-            trace!("Got event window at index {}", pos);
-
+        self.prev_mouse = (event.root_x(), event.root_y());
+        if let Some(pos) = self.get_client_from_frame(event.child()) {
             for bind in &self.config.mousebinds {
-                if event.button == u32::from(bind.bind) && event.state == bind.get_mask()
-                // state -> modifier mask
-                {
+                if event.detail() == bind.bind as u8 && event.state() as u32 == bind.get_mask() {
                     match bind.action {
                         Action::WindowMove => self.mode = Mode::Move(self.clients[pos]),
                         Action::WindowResize => self.mode = Mode::Resize(self.clients[pos]),
@@ -217,52 +218,61 @@ impl Workspace {
         }
     }
 
-    pub fn on_button_release(&mut self, _event: xlib::XButtonReleasedEvent) {
+    pub fn on_button_release(&mut self, _event: &xcb::ButtonReleaseEvent) {
         self.mode = Mode::None;
     }
 
-    pub fn on_pointer_move(&mut self, event: xlib::XMotionEvent) {
+    pub fn on_pointer_move(&mut self, event: &xcb::MotionNotifyEvent) {
         match self.mode {
             Mode::Move(client) => {
-                let properties = client.frame.get_properties(&self.context);
-                let mut changes = xlib::XWindowChanges {
-                    x: properties.x + (event.x_root - self.prev_mouse.0),
-                    y: properties.y + (event.y_root - self.prev_mouse.1),
-                    width: 0,
-                    height: 0,
-                    border_width: 0,
-                    sibling: 0,
-                    stack_mode: 0,
-                };
-                client
+                let properties = client
                     .frame
-                    .configure(&self.context, &mut changes, (xlib::CWX | xlib::CWY) as u32);
+                    .get_geometry(&self.context)
+                    .get_reply()
+                    .unwrap();
+                let changes: [(u16, u32); 2] = [
+                    (
+                        xcb::CONFIG_WINDOW_X as u16,
+                        (properties.x() + (event.root_x() - self.prev_mouse.0 as i16)) as u32,
+                    ),
+                    (
+                        xcb::CONFIG_WINDOW_Y as u16,
+                        (properties.y() + (event.root_y() - self.prev_mouse.1 as i16)) as u32,
+                    ),
+                ];
+                client.frame.configure(&self.context, &changes);
             }
             Mode::Resize(client) => {
-                let properties = client.internal.get_properties(&self.context);
-                let mut changes = xlib::XWindowChanges {
-                    x: 0,
-                    y: 0,
-                    width: properties.width + (event.x_root - self.prev_mouse.0),
-                    height: properties.height + (event.y_root - self.prev_mouse.1),
-                    border_width: 0,
-                    sibling: 0,
-                    stack_mode: 0,
-                };
-                let mut frame_changes = changes;
-                client.internal.configure(
-                    &self.context,
-                    &mut changes,
-                    (xlib::CWWidth | xlib::CWHeight) as u32,
-                );
-                client.frame.configure(
-                    &self.context,
-                    &mut frame_changes,
-                    (xlib::CWWidth | xlib::CWHeight) as u32,
-                );
+                let properties = client
+                    .frame
+                    .get_geometry(&self.context)
+                    .get_reply()
+                    .unwrap();
+                let changes: [(u16, u32); 2] = [
+                    (
+                        xcb::CONFIG_WINDOW_WIDTH as u16,
+                        std::cmp::max(
+                            (properties.width() as i16
+                                + (event.root_x() - self.prev_mouse.0 as i16))
+                                as u32,
+                            5,
+                        ),
+                    ),
+                    (
+                        xcb::CONFIG_WINDOW_HEIGHT as u16,
+                        std::cmp::max(
+                            (properties.height() as i16
+                                + (event.root_y() - self.prev_mouse.1 as i16))
+                                as u32,
+                            5,
+                        ),
+                    ),
+                ];
+                client.frame.configure(&self.context, &changes);
+                client.internal.configure(&self.context, &changes);
             }
             _ => {}
         }
-        self.prev_mouse = (event.x_root, event.y_root);
+        self.prev_mouse = (event.root_x(), event.root_y());
     }
 }

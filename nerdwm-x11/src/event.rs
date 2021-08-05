@@ -1,41 +1,38 @@
 //! X Event wrapper.
 
-use x11_dl::xlib;
-
-/// X events.
-#[derive(Debug, Clone, Copy)]
+/// Events returned by the X server connection.
 #[non_exhaustive]
 pub enum Event {
     Unknown,
 
-    WindowCreate(xlib::XCreateWindowEvent),
-    WindowDestroy(xlib::XDestroyWindowEvent),
-    WindowMapRequest(xlib::XMapRequestEvent),
-    WindowUnmap(xlib::XUnmapEvent),
-    WindowConfigureRequest(xlib::XConfigureRequestEvent),
+    WindowCreate(xcb::CreateNotifyEvent),
+    WindowDestroy(xcb::DestroyNotifyEvent),
+    WindowMapRequest(xcb::MapRequestEvent),
+    WindowUnmap(xcb::UnmapNotifyEvent),
+    WindowConfigureRequest(xcb::ConfigureRequestEvent),
 
-    ButtonPress(xlib::XButtonPressedEvent),
-    ButtonRelease(xlib::XButtonReleasedEvent),
-    KeyPress(xlib::XKeyPressedEvent),
-    KeyRelease(xlib::XKeyReleasedEvent),
-    PointerMotion(xlib::XPointerMovedEvent),
+    ButtonPress(xcb::ButtonPressEvent),
+    ButtonRelease(xcb::ButtonReleaseEvent),
+    KeyPress(xcb::KeyPressEvent),
+    KeyRelease(xcb::KeyReleaseEvent),
+    PointerMotion(xcb::MotionNotifyEvent),
 }
 
-impl From<xlib::XEvent> for Event {
-    fn from(event: xlib::XEvent) -> Self {
-        match event.get_type() {
-            xlib::CreateNotify => Self::WindowCreate(unsafe { event.create_window }),
-            xlib::DestroyNotify => Self::WindowDestroy(unsafe { event.destroy_window }),
-            xlib::MapRequest => Self::WindowMapRequest(unsafe { event.map_request }),
-            xlib::UnmapNotify => Self::WindowUnmap(unsafe { event.unmap }),
-            xlib::ConfigureRequest => {
-                Self::WindowConfigureRequest(unsafe { event.configure_request })
+impl From<xcb::GenericEvent> for Event {
+    fn from(event: xcb::GenericEvent) -> Self {
+        match event.response_type() {
+            xcb::CREATE_NOTIFY => Self::WindowCreate(unsafe { std::mem::transmute(event) }),
+            xcb::DESTROY_NOTIFY => Self::WindowDestroy(unsafe { std::mem::transmute(event) }),
+            xcb::MAP_REQUEST => Self::WindowMapRequest(unsafe { std::mem::transmute(event) }),
+            xcb::UNMAP_NOTIFY => Self::WindowUnmap(unsafe { std::mem::transmute(event) }),
+            xcb::CONFIGURE_REQUEST => {
+                Self::WindowConfigureRequest(unsafe { std::mem::transmute(event) })
             }
-            xlib::ButtonPress => Self::ButtonPress(unsafe { event.button }),
-            xlib::ButtonRelease => Self::ButtonRelease(unsafe { event.button }),
-            xlib::KeyPress => Self::KeyPress(unsafe { event.key }),
-            xlib::KeyRelease => Self::KeyRelease(unsafe { event.key }),
-            xlib::MotionNotify => Self::PointerMotion(unsafe { event.motion }),
+            xcb::BUTTON_PRESS => Self::ButtonPress(unsafe { std::mem::transmute(event) }),
+            xcb::BUTTON_RELEASE => Self::ButtonRelease(unsafe { std::mem::transmute(event) }),
+            xcb::KEY_PRESS => Self::KeyPress(unsafe { std::mem::transmute(event) }),
+            xcb::KEY_RELEASE => Self::KeyRelease(unsafe { std::mem::transmute(event) }),
+            xcb::MOTION_NOTIFY => Self::PointerMotion(unsafe { std::mem::transmute(event) }),
             _ => Self::Unknown,
         }
     }

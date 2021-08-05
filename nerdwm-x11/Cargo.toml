@@ -10,6 +10,7 @@ authors = ["Sachin Cherian <sachinctl@protonmail.com>"]
 
 [dependencies]
 log = "0.4"
-xcb = "0.9.0"
-x11-dl = "2.18.5"
+libc = "0.2"
+xcb = "0.9"
+xcb-util = { version = "0.3.0", features = ["keysyms"] }
 serde = { version = "1.0", features = ["derive"] }

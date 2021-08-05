@@ -1,160 +1,175 @@
-//! X connection wrapper.
+//! X server connection utilities.
+
+use std::rc::Rc;
 
 use log::*;
-use x11_dl::xlib;
 
 use crate::event;
+use crate::keysym::KeySymbols;
 use crate::window;
 
-/// Safe wrapper around an X server connection.
-pub struct DisplayContext {
-    /// X context
-    xlib: xlib::Xlib,
-    /// Connection to the server
-    display: *mut xlib::_XDisplay,
-}
+pub type XID = u32;
 
-impl Default for DisplayContext {
-    fn default() -> Self {
-        Self::new()
-    }
+/// Utilities for communicating with the X server.
+///
+/// Objects that are represented with an `xid`, are defined
+/// in their own structures and provide their own methods.
+/// Everything else is provided by this.
+pub struct DisplayContext {
+    /// X connection
+    connection: Rc<xcb::Connection>,
+    /// Preferred screen number
+    screen_number: i32,
+    /// Keysymbols for this connection
+    keysymbols: KeySymbols,
 }
 
 impl DisplayContext {
     /// Create a new connection to the X server.
     pub fn new() -> Self {
-        // Initialize X
-        let xlib = xlib::Xlib::open().expect("Could not connect to X Server");
-        // Connection to X server
-        let display = unsafe { (xlib.XOpenDisplay)(std::ptr::null()) };
+        // Connect to the X server
+        let (connection, screen_number) =
+            xcb::Connection::connect(None).expect("Could not connect to the X server.");
 
-        assert!(!display.is_null(), "Null pointer in display");
+        let connection = Rc::new(connection);
+        let keysymbols = KeySymbols::new(connection.clone());
 
         info!("Connected to X server");
 
-        Self { xlib, display }
+        Self {
+            connection,
+            screen_number,
+            keysymbols,
+        }
     }
 
-    /// Get raw xlib context.
-    pub fn get_raw_context(&self) -> &xlib::Xlib {
-        &self.xlib
-    }
-
-    /// Get connection id.
-    pub fn get_connection(&self) -> *mut xlib::_XDisplay {
-        self.display
+    /// Get internal xcb connection object.
+    pub fn get_connection(&self) -> &xcb::Connection {
+        &self.connection
     }
 
     /// Get default root window.
     pub fn get_default_root(&self) -> window::Window {
-        window::Window::from_xid(unsafe { (self.xlib.XDefaultRootWindow)(self.display) })
+        window::Window::from_xid(
+            self.connection
+                .get_setup()
+                .roots()
+                .nth(self.screen_number as usize)
+                .unwrap()
+                .root(),
+        )
     }
 
-    /// Set an error callback for xlib.
-    pub fn set_error_callback(
-        &self,
-        callback: Option<unsafe extern "C" fn(*mut xlib::_XDisplay, *mut xlib::XErrorEvent) -> i32>,
-    ) {
-        unsafe { (self.xlib.XSetErrorHandler)(callback) };
+    /// Get key symbols for this connection.
+    pub fn get_key_symbols(&self) -> &KeySymbols {
+        &self.keysymbols
     }
 
-    /// Disable requests on all other connections.
+    /// Disable request processing on all other connections.
     pub fn grab_server(&self) {
-        unsafe { (self.xlib.XGrabServer)(self.display) };
+        xcb::grab_server(&self.connection);
     }
 
-    /// Allow request processing on other connections.
+    /// Allow request processing on all other connections.
     pub fn ungrab_server(&self) {
-        unsafe { (self.xlib.XUngrabServer)(self.display) };
+        xcb::ungrab_server(&self.connection);
     }
 
     /// Flush the X command queue.
     pub fn flush(&self) {
-        unsafe { (self.xlib.XSync)(self.display, xlib::False) };
+        self.connection.flush();
     }
 
     /// Get next input event.
     pub fn get_next_event(&self) -> event::Event {
-        unsafe {
-            trace!("{} Pending events", (self.xlib.XPending)(self.display));
-
-            let mut raw_event: xlib::XEvent = std::mem::zeroed();
-            (self.xlib.XNextEvent)(self.display, &mut raw_event);
-            raw_event.into()
-        }
+        self.connection.wait_for_event().unwrap().into()
     }
 
     /// Create a cursor.
-    /// See cursor definition from <https://tronche.com/gui/x/xlib/appendix/b/>
-    pub fn get_cursor(&self, cursor: u32) -> u64 {
-        unsafe { (self.xlib.XCreateFontCursor)(self.display, cursor) }
+    pub fn get_cursor(&self, cursor_id: u16) -> u32 {
+        // https://xcb.freedesktop.org/tutorial/mousecursors/
+        let font = self.connection.generate_id();
+        xcb::open_font_checked(&self.connection, font, "cursor");
+
+        let cursor = self.connection.generate_id();
+        xcb::create_glyph_cursor_checked(
+            &self.connection,
+            cursor,
+            font,
+            font,
+            cursor_id,
+            cursor_id + 1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        );
+        cursor
     }
 
     /// Passively grab keyboard key.
-    pub fn grab_key(&self, window: &window::Window, key: u32, modifiers: u32) {
-        unsafe {
-            // https://tronche.com/gui/x/xlib/input/XGrabKey.html
-            (self.xlib.XGrabKey)(
-                self.display,
-                (self.xlib.XKeysymToKeycode)(self.display, key as u64) as i32, // key code
-                modifiers,                                                     // modifier mask
-                window.get_xid(),                                              // grab window
-                1,                                                             // owner events (?)
-                xlib::GrabModeAsync, // process pointer events without freezing
-                xlib::GrabModeAsync, // process keyboard events without freezing
-            )
-        };
+    pub fn grab_key(&self, window: &window::Window, key: u32, modifiers: u16) {
+        xcb::grab_key_checked(
+            &self.connection,
+            true,
+            window.get_xid(),
+            modifiers,
+            self.keysymbols.get_keycode(key).next().unwrap(),
+            xcb::GRAB_MODE_ASYNC as u8,
+            xcb::GRAB_MODE_ASYNC as u8,
+        );
     }
 
     /// Release grab on keyboard key.
-    pub fn ungrab_key(&self, window: &window::Window, key: u32, modifiers: u32) {
-        unsafe { (self.xlib.XUngrabKey)(self.display, key as i32, modifiers, window.get_xid()) };
+    pub fn ungrab_key(&self, window: &window::Window, key: u32, modifiers: u16) {
+        xcb::ungrab_key_checked(&self.connection, key as u8, window.get_xid(), modifiers);
     }
 
     /// Passively grab mouse button from window.
-    pub fn grab_button(&self, window: &window::Window, button: u32, modifiers: u32) {
-        unsafe {
-            // https://tronche.com/gui/x/xlib/input/XGrabButton.html
-            (self.xlib.XGrabButton)(
-                self.display,
-                button,           // mouse button
-                modifiers,        // modifier mask
-                window.get_xid(), // grab window
-                0,                // owner events
-                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32, // event mask
-                xlib::GrabModeAsync, // process pointer events without freezing
-                xlib::GrabModeAsync, // process keyboard events without freezing
-                0,                   // confine pointer to window
-                0,                   // cursor to display
-            )
-        };
+    pub fn grab_button(&self, window: &window::Window, button: u8, modifiers: u16) {
+        xcb::grab_button_checked(
+            &self.connection,
+            false, // owner events
+            window.get_xid(),
+            (xcb::EVENT_MASK_BUTTON_PRESS
+                | xcb::EVENT_MASK_BUTTON_RELEASE
+                | xcb::EVENT_MASK_POINTER_MOTION) as u16, // event mask
+            xcb::GRAB_MODE_ASYNC as u8, // pointer mode
+            xcb::GRAB_MODE_ASYNC as u8, // keyboard mode
+            0,                          // confine to window
+            0,                          // cursor
+            button,
+            modifiers,
+        );
     }
 
     /// Release grab on mouse button.
-    pub fn ungrab_button(&self, window: &window::Window, button: u32, modifiers: u32) {
-        unsafe { (self.xlib.XUngrabButton)(self.display, button, modifiers, window.get_xid()) };
+    pub fn ungrab_button(&self, window: &window::Window, button: u8, modifiers: u16) {
+        xcb::ungrab_button_checked(&self.connection, button, window.get_xid(), modifiers);
     }
 
     /// Actively grab the mouse pointer.
-    pub fn grab_pointer(&self, window: &window::Window, cursor: u64) {
-        unsafe {
-            // https://tronche.com/gui/x/xlib/input/XGrabPointer.html
-            (self.xlib.XGrabPointer)(
-                self.display,
-                window.get_xid(), // grab window
-                1,                // owner events
-                (xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask) as u32, // event mask
-                xlib::GrabModeAsync, // process pointer events without freezing
-                xlib::GrabModeAsync, // process keyboard events without freezing
-                0,                   // confine to window
-                cursor,              // cursor to display
-                xlib::CurrentTime,
-            )
-        };
+    pub fn grab_pointer(&self, window: &window::Window, cursor: u32) {
+        // https://tronche.com/gui/x/xlib/input/XGrabPointer.html
+        xcb::grab_pointer(
+            &self.connection,
+            true, // owner events
+            window.get_xid(),
+            (xcb::EVENT_MASK_BUTTON_PRESS
+                | xcb::EVENT_MASK_BUTTON_RELEASE
+                | xcb::EVENT_MASK_POINTER_MOTION) as u16, // event mask
+            xcb::GRAB_MODE_ASYNC as u8, // pointer mode
+            xcb::GRAB_MODE_ASYNC as u8, // keyboard mode
+            0,                          // confine to window
+            cursor,                     // cursor
+            xcb::CURRENT_TIME,
+        );
     }
 
     /// Release grab on mouse pointer.
     pub fn ungrab_pointer(&self) {
-        unsafe { (self.xlib.XUngrabPointer)(self.display, xlib::CurrentTime) };
+        xcb::ungrab_pointer_checked(&self.connection, xcb::CURRENT_TIME);
     }
 }

@@ -87,10 +87,11 @@ dependencies = [
 name = "nerdwm-x11"
 version = "0.0.1"
 dependencies = [
+ "libc",
  "log",
  "serde",
- "x11-dl",
  "xcb",
+ "xcb-util",
 ]
 
 [[package]]
@@ -249,6 +250,16 @@ checksum = "62056f63138b39116f82a540c983cc11f1c90cd70b3d492a70c25eaa50bd22a6"
 dependencies = [
  "libc",
  "log",
+]
+
+[[package]]
+name = "xcb-util"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43893e47f27bf7d81d489feef3a0e34a457e90bc314b7e74ad9bb3980e4c1c48"
+dependencies = [
+ "libc",
+ "xcb",
 ]
 
 [[package]]
