@@ -1,5 +1,5 @@
 // This code derived from https://github.com/meh/rust-xcb-util
-
+//
 // Copyright (c) 2016 meh. <meh@schizofreni.co>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -22,18 +22,18 @@
 
 #![allow(dead_code)]
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use libc::{c_void, free};
 use xcb_util::ffi::keysyms::*;
 
 pub struct KeySymbols {
     ptr: *mut xcb_key_symbols_t,
-    conn: Rc<xcb::Connection>,
+    conn: Arc<xcb::Connection>,
 }
 
 impl KeySymbols {
-    pub fn new(c: Rc<xcb::Connection>) -> KeySymbols {
+    pub fn new(c: Arc<xcb::Connection>) -> KeySymbols {
         unsafe {
             KeySymbols {
                 ptr: xcb_key_symbols_alloc(c.get_raw_conn()),

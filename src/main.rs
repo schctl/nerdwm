@@ -1,20 +1,32 @@
 #![doc = include_str!("../README.md")]
 
-pub mod config;
-pub mod wm;
-pub mod workspace;
+#[macro_use]
+mod macros;
 
-use std::io::Write;
+mod atoms;
+mod errors;
+mod events;
+mod prelude;
+mod wm;
 
-use crate::config::Config;
-use crate::wm::WindowManager;
+use prelude::*;
+
+/// Get base directories based on the [`XDG specification`].
+///
+/// [`XDG specification`]: https://wiki.debian.org/XDGBaseDirectorySpecification
+fn get_xdg_dirs() -> xdg::BaseDirectories {
+    xdg::BaseDirectories::with_prefix("nerdwm").unwrap()
+}
 
 /// Configure file logging.
+///
+/// This creates a new [`fern`] logger, with the [`LevelFilter`] set
+/// to [`LevelFilter::Trace`] (when debug assertions are turned on)
+/// or [`LevelFilter::Info`], and writes to the path
+/// `$XDG_CACHE_HOME/nerdwm/logs/nerdwm-{timestamp}.log`
 fn setup_logger() {
     // ~/.cache/nerdwm
-    let xdg_dirs = xdg::BaseDirectories::with_prefix("nerdwm").unwrap();
-
-    let mut log_path = xdg_dirs.get_cache_home();
+    let mut log_path = get_xdg_dirs().get_cache_home();
     log_path.push("logs");
 
     if !log_path.exists() {
@@ -33,7 +45,7 @@ fn setup_logger() {
     let current_log_level = log::LevelFilter::Trace;
 
     #[cfg(not(debug_assertions))]
-    let current_log_level = log::LevelFilter::Info;
+    let current_log_level = log::LevelFilter::Trace;
 
     fern::Dispatch::new()
         .format(|out, message, record| {
@@ -43,7 +55,7 @@ fn setup_logger() {
                 record.target(),
                 record.level(),
                 message
-            ))
+            ));
         })
         .level(current_log_level)
         .chain(fern::log_file(log_path).unwrap())
@@ -51,27 +63,21 @@ fn setup_logger() {
         .unwrap();
 }
 
-fn main() {
-    // ~/.config/nerdwm
-    let xdg_dirs = xdg::BaseDirectories::with_prefix("nerdwm").unwrap();
+/// Set a new panic hook.
+/// The new hook writes the panic message to stderr
+/// and logs it.
+fn setup_panic() {
+    ::std::panic::set_hook(Box::new(|info| {
+        eprintln!("{}", info);
+        error!("{}", info);
+    }));
+}
 
+#[tokio::main]
+async fn main() {
     setup_logger();
+    setup_panic();
 
-    // Read configuration file
-    let config = {
-        let mut config = xdg_dirs.get_config_home();
-        config.push("config.json");
-
-        // Generate default config file
-        if !config.exists() {
-            let default_config = include_str!("../res/config.json");
-            std::fs::create_dir_all(&config.parent().unwrap()).unwrap();
-            let mut file = std::fs::File::create(&config).unwrap();
-            file.write_all(default_config.as_bytes()).unwrap();
-        }
-
-        Config::new(&config)
-    };
-
-    WindowManager::new(config).run();
+    let mut manager = wm::WindowManager::new().unwrap();
+    manager.run().await.unwrap();
 }
