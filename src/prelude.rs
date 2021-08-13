@@ -1,5 +1,4 @@
-//! Useful imports.
+//! Useful re-exports.
 
 pub use crate::errors::*;
 pub use log::*;
-pub use std::ffi::CString;

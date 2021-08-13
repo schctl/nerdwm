@@ -1,4 +1,4 @@
-//! [`EWMH`] utilities.
+//! Helpers for accessing the [`EWMH`] protocol.
 //!
 //! [`EWMH`]: https://en.wikipedia.org/wiki/Extended_Window_Manager_Hints
 
@@ -10,18 +10,22 @@ use crate::atoms::AtomManager;
 use crate::prelude::*;
 
 // Atoms required by the EWMH protocol
-define_properties_by_string! {
-    pub supported {
+define_string_consts! {
+    pub protocols {
         _NET_SUPPORTED,
         _NET_WM_NAME,
         _NET_WM_PID,
         _NET_CLIENT_LIST,
         _NET_DESKTOP_NAMES,
         _NET_NUMBER_OF_DESKTOPS,
+        _NET_ACTIVE_WINDOW,
     }
 }
 
-/// Helper for setting EWMH hints
+/// Helper for setting EWMH hints.
+///
+/// Also provides general functions
+/// for managing properties / atoms.
 pub struct EWMHManager {
     conn: Arc<xcb::Connection>,
     atoms: AtomManager,
@@ -41,7 +45,7 @@ impl EWMHManager {
         self.conn.get_setup().roots().next().unwrap().root()
     }
 
-    /// Get an atom value.
+    /// Get the value of an atom.
     pub fn get_atom(&self, name: &'static str) -> NerdResult<xcb::Atom> {
         self.atoms.get(name)
     }
@@ -49,16 +53,17 @@ impl EWMHManager {
     /// Get supported protocols.
     pub fn get_net_supported(&self) -> NerdResult<Vec<xcb::Atom>> {
         Ok(vec![
-            self.atoms.get(supported::_NET_WM_NAME)?,
-            self.atoms.get(supported::_NET_WM_PID)?,
-            self.atoms.get(supported::_NET_CLIENT_LIST)?,
-            self.atoms.get(supported::_NET_DESKTOP_NAMES)?,
-            self.atoms.get(supported::_NET_NUMBER_OF_DESKTOPS)?,
+            self.atoms.get(protocols::_NET_WM_NAME)?,
+            self.atoms.get(protocols::_NET_WM_PID)?,
+            self.atoms.get(protocols::_NET_CLIENT_LIST)?,
+            self.atoms.get(protocols::_NET_DESKTOP_NAMES)?,
+            self.atoms.get(protocols::_NET_NUMBER_OF_DESKTOPS)?,
+            self.atoms.get(protocols::_NET_ACTIVE_WINDOW)?,
         ])
     }
 
     /// Change a property with type [`xcb::ATOM_ATOM`].
-    fn set_property_atom(
+    pub fn set_property_atom(
         &self,
         window: xcb::Window,
         property: xcb::Atom,
@@ -77,8 +82,8 @@ impl EWMHManager {
         Ok(())
     }
 
-    /// Change property with type [`xcb::ATOM_CARDINAL`].
-    fn set_property_cardinal(
+    /// Change a property with type [`xcb::ATOM_CARDINAL`].
+    pub fn set_property_cardinal(
         &self,
         window: xcb::Window,
         property: xcb::Atom,
@@ -97,12 +102,12 @@ impl EWMHManager {
         Ok(())
     }
 
-    /// Change property with type [`xcb::ATOM_STRING`].
-    fn set_property_string(
+    /// Change a property with type [`xcb::ATOM_STRING`].
+    pub fn set_property_string(
         &self,
         window: xcb::Window,
         property: xcb::Atom,
-        values: &[String],
+        values: &[&str],
     ) -> NerdResult<()> {
         // :/
         let mut cstr_values: Vec<u8> = Vec::new();
@@ -116,7 +121,7 @@ impl EWMHManager {
             xcb::PROP_MODE_REPLACE as u8,
             window,
             property,
-            self.atoms.get("UTF8_STRING")?,
+            self.get_atom("UTF8_STRING")?,
             8,
             &cstr_values[..],
         )
@@ -124,11 +129,31 @@ impl EWMHManager {
         Ok(())
     }
 
+    /// Change a property with type [`xcb::ATOM_WINDOW`].
+    pub fn set_property_window(
+        &self,
+        window: xcb::Window,
+        property: xcb::Atom,
+        values: &[u32],
+    ) -> NerdResult<()> {
+        xcb::change_property(
+            &self.conn,
+            xcb::PROP_MODE_REPLACE as u8,
+            window,
+            property,
+            xcb::ATOM_WINDOW,
+            32,
+            values,
+        )
+        .request_check()?;
+        Ok(())
+    }
+
     /// Hint supported protocols.
-    pub fn set_net_supported(&self) -> NerdResult<()> {
+    pub fn set_supported(&self) -> NerdResult<()> {
         self.set_property_atom(
             self.get_root(),
-            self.atoms.get(supported::_NET_SUPPORTED)?,
+            self.get_atom(protocols::_NET_SUPPORTED)?,
             &self.get_net_supported()?[..],
         )?;
         debug!("Successfully set supported hints");
@@ -139,8 +164,8 @@ impl EWMHManager {
     pub fn set_name(&self, name: &str) -> NerdResult<()> {
         self.set_property_string(
             self.get_root(),
-            self.atoms.get(supported::_NET_WM_NAME)?,
-            &[name.to_owned()],
+            self.get_atom(protocols::_NET_WM_NAME)?,
+            &[name],
         )?;
         debug!("Successfully set name hint");
         Ok(())
@@ -150,30 +175,48 @@ impl EWMHManager {
     pub fn set_pid(&self) -> NerdResult<()> {
         self.set_property_cardinal(
             self.get_root(),
-            self.atoms.get(supported::_NET_WM_PID)?,
+            self.get_atom(protocols::_NET_WM_PID)?,
             &[std::process::id()],
         )?;
         debug!("Successfully set pid hint");
         Ok(())
     }
 
-    /// Change desktop hints.
-    pub fn update_desktops(&self, desktops: &[String]) -> NerdResult<()> {
+    /// Update desktop hints.
+    ///
+    /// These hints include:
+    /// - `_NET_DESKTOP_NAMES`
+    /// - `_NET_NUMBER_OF_DESKTOPS`
+    pub fn update_desktops(&self, desktops: &[&str]) -> NerdResult<()> {
         // Number of desktops
         self.set_property_cardinal(
             self.get_root(),
-            self.atoms.get(supported::_NET_NUMBER_OF_DESKTOPS)?,
+            self.get_atom(protocols::_NET_NUMBER_OF_DESKTOPS)?,
             &[desktops.len() as u32],
         )?;
 
         // Desktop names
         self.set_property_string(
             self.get_root(),
-            self.atoms.get(supported::_NET_DESKTOP_NAMES)?,
+            self.get_atom(protocols::_NET_DESKTOP_NAMES)?,
             desktops,
         )?;
 
         debug!("Successfully set desktop hints");
+        Ok(())
+    }
+
+    /// Change active window hints.
+    pub fn update_active_window(&self, active: Option<xcb::Window>) -> NerdResult<()> {
+        let win = if let Some(w) = active { w } else { xcb::NONE };
+
+        self.set_property_window(
+            self.get_root(),
+            self.get_atom(protocols::_NET_ACTIVE_WINDOW)?,
+            &[win],
+        )?;
+
+        debug!("Successfully set active window");
         Ok(())
     }
 }

@@ -46,14 +46,14 @@ xcb_error_impl! {
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
-    /// A fatal error that will shutdown a connection.
+    /// A fatal error that results in a connection shutting down.
     Connection(xcb::ConnError),
     /// All XCB error types.
     Xcb(XcbError),
     /// Can occur during conversion to/from a C-String.
     Nul(NulError),
-    /// When some resource is not found.
-    IoEnd,
+    /// Some resource was not found.
+    NotFound(&'static str),
 }
 
 impl From<xcb::ConnError> for Error {

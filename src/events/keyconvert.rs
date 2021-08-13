@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//! Keycode to Keysym conversion utilities.
+
 #![allow(dead_code)]
 
 use std::sync::Arc;

@@ -20,9 +20,9 @@ fn get_xdg_dirs() -> xdg::BaseDirectories {
 
 /// Configure file logging.
 ///
-/// This creates a new [`fern`] logger, with the [`LevelFilter`] set
-/// to [`LevelFilter::Trace`] (when debug assertions are turned on)
-/// or [`LevelFilter::Info`], and writes to the path
+/// This creates a new [`fern`] logger, with the [`LevelFilter`] set to
+/// [`LevelFilter::Trace`] (when debug assertions are turned on) or else
+/// [`LevelFilter::Info`], and writes to the path
 /// `$XDG_CACHE_HOME/nerdwm/logs/nerdwm-{timestamp}.log`
 fn setup_logger() {
     // ~/.cache/nerdwm
@@ -64,8 +64,8 @@ fn setup_logger() {
 }
 
 /// Set a new panic hook.
-/// The new hook writes the panic message to stderr
-/// and logs it.
+///
+/// The new hook writes the panic message to stderr and logs it.
 fn setup_panic() {
     ::std::panic::set_hook(Box::new(|info| {
         eprintln!("{}", info);
