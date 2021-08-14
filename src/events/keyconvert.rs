@@ -29,15 +29,13 @@ use xcb_util::ffi::keysyms::*;
 
 pub struct KeySymbols {
     ptr: *mut xcb_key_symbols_t,
-    conn: Arc<xcb::Connection>,
 }
 
 impl KeySymbols {
-    pub fn new(c: Arc<xcb::Connection>) -> KeySymbols {
+    pub fn new(c: &xcb::Connection) -> KeySymbols {
         unsafe {
             KeySymbols {
                 ptr: xcb_key_symbols_alloc(c.get_raw_conn()),
-                conn: c,
             }
         }
     }

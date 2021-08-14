@@ -73,7 +73,7 @@ impl EventManager {
     pub fn new(conn: Arc<xcb::Connection>) -> Self {
         Self {
             conn: conn.clone(),
-            keysyms: keyconvert::KeySymbols::new(conn),
+            keysyms: keyconvert::KeySymbols::new(&conn),
         }
     }
 

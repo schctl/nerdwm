@@ -1,7 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-use prelude::*;
-
 #[macro_use]
 mod macros;
 
@@ -11,12 +9,7 @@ mod events;
 mod prelude;
 mod wm;
 
-/// Get base directories based on the [`XDG specification`].
-///
-/// [`XDG specification`]: https://wiki.debian.org/XDGBaseDirectorySpecification
-fn get_xdg_dirs() -> xdg::BaseDirectories {
-    xdg::BaseDirectories::with_prefix("nerdwm").unwrap()
-}
+use prelude::*;
 
 /// Configure file logging.
 ///
@@ -25,7 +18,8 @@ fn get_xdg_dirs() -> xdg::BaseDirectories {
 /// [`LevelFilter::Info`], and writes to the path
 /// `$XDG_CACHE_HOME/nerdwm/logs/nerdwm-{timestamp}.log`
 fn setup_logger() {
-    // ~/.cache/nerdwm
+    // TODO: propagate `Result`s, and some kind of fallback?
+
     let mut log_path = get_xdg_dirs().get_cache_home();
     log_path.push("logs");
 
@@ -67,7 +61,7 @@ fn setup_logger() {
 ///
 /// The new hook writes the panic message to stderr and logs it.
 fn setup_panic() {
-    ::std::panic::set_hook(Box::new(|info| {
+    std::panic::set_hook(Box::new(|info| {
         eprintln!("{}", info);
         error!("{}", info);
     }));

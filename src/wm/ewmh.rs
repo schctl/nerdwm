@@ -156,7 +156,7 @@ impl EWMHManager {
             self.get_atom(protocols::_NET_SUPPORTED)?,
             &self.get_net_supported()?[..],
         )?;
-        debug!("Successfully set supported hints");
+        trace!("Successfully set supported hints");
         Ok(())
     }
 
@@ -167,7 +167,7 @@ impl EWMHManager {
             self.get_atom(protocols::_NET_WM_NAME)?,
             &[name],
         )?;
-        debug!("Successfully set name hint");
+        trace!("Successfully set name hint");
         Ok(())
     }
 
@@ -178,7 +178,7 @@ impl EWMHManager {
             self.get_atom(protocols::_NET_WM_PID)?,
             &[std::process::id()],
         )?;
-        debug!("Successfully set pid hint");
+        trace!("Successfully set pid hint");
         Ok(())
     }
 
@@ -202,7 +202,7 @@ impl EWMHManager {
             desktops,
         )?;
 
-        debug!("Successfully set desktop hints");
+        trace!("Successfully set desktop hints");
         Ok(())
     }
 
@@ -216,7 +216,7 @@ impl EWMHManager {
             &[win],
         )?;
 
-        debug!("Successfully set active window");
+        trace!("Successfully set active window");
         Ok(())
     }
 
@@ -228,7 +228,7 @@ impl EWMHManager {
             clients,
         )?;
 
-        debug!("Successfully updated client list");
+        trace!("Successfully updated client list");
         Ok(())
     }
 }

@@ -10,15 +10,6 @@ use super::ewmh;
 use super::layout;
 use crate::prelude::*;
 
-/// The "state" of the desktop. Processing of
-/// events will depend on this.
-#[derive(Debug, PartialEq, Eq)]
-enum Mode {
-    None,
-    MovingWindow(xcb::Window),
-    ResizingWindow(xcb::Window),
-}
-
 /// Structure containing all clients on a virtual desktop, or workspace.
 ///
 /// Clients owned by this desktop will always need to be visible.
@@ -36,8 +27,7 @@ pub struct Desktop {
     // ---------------------
     /// Last known mouse position.
     /// Used to determine scale of window resizing/movement.
-    last_mouse: (i16, i16),
-    mode: Mode,
+    last_mouse: Option<(i16, i16)>,
 }
 
 impl Desktop {
@@ -54,8 +44,7 @@ impl Desktop {
             clients: vec![],
             layout_mgr,
             ewmh_mgr,
-            last_mouse: (0, 0),
-            mode: Mode::None,
+            last_mouse: None,
         }
     }
 
@@ -147,38 +136,44 @@ impl Desktop {
 
     /// Internal handler for moving windows.
     fn move_handler(&mut self, event: &events::Event) -> NerdResult<()> {
-        if let Mode::MovingWindow(client) = self.mode {
-            match event {
-                // Move window by pointer delta
-                events::Event::PointerMotion(e) => {
-                    debug!("Moving window!");
-                    let properties = xcb::get_geometry(&self.conn, client).get_reply()?;
+        match event {
+            // Move window by pointer delta
+            events::Event::PointerMotion(e) => {
+                // Child doesn't exist
+                if e.child() == 0 {
+                    return Ok(());
+                }
+
+                if let Some(last_mouse) = self.last_mouse {
+                    // WHY do we get negative values for position?
+                    let properties = xcb::get_geometry(&self.conn, e.child()).get_reply()?;
+
+                    trace!("{} {}", properties.x(), properties.y());
+
                     let changes: [(u16, u32); 2] = [
                         (
                             xcb::CONFIG_WINDOW_X as u16,
-                            (properties.x() + (e.root_x() - self.last_mouse.0 as i16)) as u32,
+                            (properties.x() + (e.root_x() - last_mouse.0)) as u32,
                         ),
                         (
                             xcb::CONFIG_WINDOW_Y as u16,
-                            (properties.y() + (e.root_y() - self.last_mouse.1 as i16)) as u32,
+                            (properties.y() + (e.root_y() - last_mouse.1)) as u32,
                         ),
                     ];
-                    xcb::configure_window(&self.conn, client, &changes).request_check()?;
-                    self.last_mouse = (e.root_x(), e.root_y());
+
+                    xcb::configure_window_checked(&self.conn, e.child(), &changes)
+                        .request_check()?;
+
+                    self.last_mouse = Some((e.root_x(), e.root_y()));
                 }
-                // Stop moving a window when a button is released.
-                events::Event::ButtonRelease(e) => {
-                    self.mode = Mode::None;
-                    self.last_mouse = (e.root_x(), e.root_y());
-                }
-                _ => {}
             }
-        } else if self.mode == Mode::None {
-            // Start moving the window
-            if let events::Event::ButtonPress(e) = event {
-                self.mode = Mode::MovingWindow(e.event());
-                self.last_mouse = (e.root_x(), e.root_y());
+            events::Event::ButtonPress(e) => {
+                self.last_mouse = Some((e.root_x(), e.root_y()));
             }
+            events::Event::ButtonRelease(_) => {
+                self.last_mouse = None;
+            }
+            _ => {}
         }
 
         Ok(())

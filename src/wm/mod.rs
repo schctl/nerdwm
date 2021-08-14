@@ -11,6 +11,15 @@ pub mod desktop;
 pub mod ewmh;
 pub mod layout;
 
+/// The "state" of the window manager. Processing of
+/// events will depend on this.
+#[derive(Debug, PartialEq, Eq)]
+enum Mode {
+    None,
+    MovingWindow,
+    ResizingWindow,
+}
+
 /// The window manager itself. This will keep track of virtual desktops and handle events.
 pub struct WindowManager {
     /// X server connection handle.
@@ -23,6 +32,8 @@ pub struct WindowManager {
     desktops: Vec<desktop::Desktop>,
     /// Global configurations.
     config: config::Config,
+    /// Global mode.
+    mode: Mode,
 }
 
 impl WindowManager {
@@ -42,12 +53,13 @@ impl WindowManager {
             ewmh_mgr: ewmh_mgr.clone(),
             event_mgr: events::EventManager::new(conn.clone()),
             config,
+            mode: Mode::None,
             // TODO: read from config
             desktops: vec![desktop::Desktop::new(
-                conn.clone(),
+                conn,
                 "main".to_owned(),
                 Box::new(layout::BlankLayout {}),
-                ewmh_mgr.clone(),
+                ewmh_mgr,
             )],
         };
 
@@ -149,25 +161,49 @@ impl WindowManager {
     }
 
     /// Tries to resolve an event into an action
-    fn event_to_action(&self, event: events::Event) -> Option<actions::Action> {
-        // This shu
-        debug!("{:?}", event);
-
-        match &event {
-            // Mouse binds
-            events::Event::ButtonPress(e) => {
-                for action in self.config.get_actions() {
-                    if let Some(b) = action.get_mousebind() {
-                        if b.get_modifier_mask() == e.state() as u32
-                            && b.get_button() as u8 == e.detail()
-                        {
-                            return Some(actions::Action::new(action.get_type(), event));
+    fn event_to_action(&mut self, event: events::Event) -> Option<actions::Action> {
+        // TODO: match mode inside event matches, so other events can be handled
+        // without making too much of a mess.
+        match &self.mode {
+            Mode::None => match &event {
+                events::Event::ButtonPress(e) => {
+                    for action in self.config.get_actions() {
+                        if let Some(b) = action.get_mousebind() {
+                            if b.get_modifier_mask() == e.state() as u32
+                                && b.get_button() as u8 == e.detail()
+                            {
+                                // TODO: We'll need to match against `action.get_type()` here
+                                // to determine if the mode is actually `MovingWindow`.
+                                // But this is fine for now.
+                                self.mode = Mode::MovingWindow;
+                                return Some(actions::Action::new(action.get_type(), event));
+                            }
                         }
                     }
                 }
-            }
+                events::Event::ButtonRelease(e) => {
+                    for action in self.config.get_actions() {
+                        if let Some(b) = action.get_mousebind() {
+                            if b.get_modifier_mask() == e.state() as u32
+                                && b.get_button() as u8 == e.detail()
+                            {
+                                self.mode = Mode::None;
+                                return Some(actions::Action::new(action.get_type(), event));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Mode::MovingWindow => match &event {
+                events::Event::PointerMotion(_) => {
+                    return Some(actions::Action::new(actions::ActionType::WindowMove, event));
+                }
+                _ => {}
+            },
             _ => {}
         }
+
         None
     }
 
@@ -177,13 +213,14 @@ impl WindowManager {
             self.conn.flush();
 
             let event = self.event_mgr.get_event()?;
+
             match event {
+                // This will be fixed with TODO on line 165
                 events::Event::WindowMapRequest(e) => {
                     self.desktops[0].focus(e.window())?;
                 }
                 _ => {
                     if let Some(action) = self.event_to_action(event) {
-                        debug!("Processing action {:?}", action);
                         self.desktops[0].do_action(action)?;
                     }
                 }

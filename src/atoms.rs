@@ -22,6 +22,7 @@ impl AtomManager {
 
     /// Retrieve an atom value.
     pub fn get(&self, name: &'static str) -> NerdResult<xcb::Atom> {
+        // TODO: propagate `Result`
         let mut atoms_lock = self.atoms.lock().unwrap();
 
         if let Some(val) = atoms_lock.get(name) {
