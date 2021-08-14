@@ -1,7 +1,5 @@
 //! Error types.
 
-use std::ffi::NulError;
-
 /// Helper macro to implement conversions for native XCB error types.
 macro_rules! xcb_error_impl {
     ($(
@@ -50,8 +48,6 @@ pub enum Error {
     Connection(xcb::ConnError),
     /// All XCB error types.
     Xcb(XcbError),
-    /// Can occur during conversion to/from a C-String.
-    Nul(NulError),
     /// Some resource was not found.
     NotFound(&'static str),
 }
@@ -59,12 +55,6 @@ pub enum Error {
 impl From<xcb::ConnError> for Error {
     fn from(e: xcb::ConnError) -> Self {
         Self::Connection(e)
-    }
-}
-
-impl From<NulError> for Error {
-    fn from(e: NulError) -> Self {
-        Self::Nul(e)
     }
 }
 

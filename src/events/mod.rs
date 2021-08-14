@@ -3,8 +3,8 @@
 use crate::prelude::*;
 use std::sync::Arc;
 
+pub mod input;
 pub mod keyconvert;
-pub mod keysyms;
 
 /// Wrapper containing an [`xcb::KeyPressEvent`] and it's corresponding
 /// keysym for a specific connection.
@@ -77,6 +77,11 @@ impl EventManager {
         }
     }
 
+    /// Get keysymbols
+    pub fn get_keysyms(&self) -> &keyconvert::KeySymbols {
+        &self.keysyms
+    }
+
     /// Wait for an event from the connection.
     pub fn get_event(&self) -> NerdResult<Event> {
         let event = match self.conn.wait_for_event() {
@@ -97,20 +102,91 @@ impl EventManager {
             xcb::BUTTON_RELEASE => Event::ButtonRelease(unsafe { std::mem::transmute(event) }),
             xcb::KEY_PRESS => {
                 let event: xcb::KeyPressEvent = unsafe { std::mem::transmute(event) };
-                let keysym = self
-                    .keysyms
-                    .press_lookup_keysym(&event, 1);
+                let keysym = self.keysyms.press_lookup_keysym(&event, 1);
                 Event::KeyPress(KeyPressEvent::new(event, keysym))
             }
             xcb::KEY_RELEASE => {
                 let event: xcb::KeyReleaseEvent = unsafe { std::mem::transmute(event) };
-                let keysym = self
-                    .keysyms
-                    .press_lookup_keysym(&event, 1);
+                let keysym = self.keysyms.press_lookup_keysym(&event, 1);
                 Event::KeyRelease(KeyReleaseEvent::new(event, keysym))
             }
             xcb::MOTION_NOTIFY => Event::PointerMotion(unsafe { std::mem::transmute(event) }),
             _ => Event::Unknown,
         })
+    }
+}
+
+impl std::fmt::Debug for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown => {
+                write!(f, "Unknown event")?;
+            }
+            Self::ClientMessage(e) => {
+                write!(f, "Client message [window: {}]", e.window())?;
+            }
+            Self::WindowCreate(e) => {
+                write!(f, "Window create [window: {}]", e.window())?;
+            }
+            Self::WindowDestroy(e) => {
+                write!(f, "Window destroy [window: {}]", e.window())?;
+            }
+            Self::WindowMapRequest(e) => {
+                write!(f, "Window map [window: {}]", e.window())?;
+            }
+            Self::WindowUnmap(e) => {
+                write!(f, "Window unmap [window: {}]", e.window())?;
+            }
+            Self::WindowConfigureRequest(e) => {
+                write!(f, "Window configure [window: {}]", e.window())?;
+            }
+            Self::ButtonPress(e) => {
+                write!(
+                    f,
+                    "Button press [window: {}, button: {}, state: {}]",
+                    e.event(),
+                    e.detail(),
+                    e.state()
+                )?;
+            }
+            Self::ButtonRelease(e) => {
+                write!(
+                    f,
+                    "Button release [window: {}, button: {}, state: {}]",
+                    e.event(),
+                    e.detail(),
+                    e.state()
+                )?;
+            }
+            Self::PointerMotion(e) => {
+                write!(
+                    f,
+                    "Pointer motion [window: {}, x: {}, y: {}]",
+                    e.event(),
+                    e.root_x(),
+                    e.root_y()
+                )?;
+            }
+            Self::KeyPress(e) => {
+                write!(
+                    f,
+                    "Key press [window: {}, key: {}, state: {}]",
+                    e.base.event(),
+                    e.keysym(),
+                    e.base.state()
+                )?;
+            }
+            Self::KeyRelease(e) => {
+                write!(
+                    f,
+                    "Key release [window: {}, key: {}, state: {}]",
+                    e.base.event(),
+                    e.keysym(),
+                    e.base.state()
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }

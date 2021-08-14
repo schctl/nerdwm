@@ -1,8 +1,8 @@
 //! Useful macros.
 //!
-//! These macros are defined here since they could be useful in multiple places.
-//! Not all macros in this crate will be defined here as other modules will define
-//! macros within themselves for use locally.
+//! These macros are defined here since they could be useful in
+//! multiple places. Not all macros in this crate will be defined
+//! here as other modules will define macros within themselves for use locally.
 
 /// Define constants with names provided, and values equal to their names, in a module.
 ///

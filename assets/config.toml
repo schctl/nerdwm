@@ -1,0 +1,3 @@
+[[actions]]
+action = "WindowMove"
+mousebind = { button = "Button1", modifiers = ["Mod4"] }

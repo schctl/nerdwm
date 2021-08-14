@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+use prelude::*;
+
 #[macro_use]
 mod macros;
 
@@ -8,8 +10,6 @@ mod errors;
 mod events;
 mod prelude;
 mod wm;
-
-use prelude::*;
 
 /// Get base directories based on the [`XDG specification`].
 ///

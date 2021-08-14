@@ -2,8 +2,6 @@
 //!
 //! [`EWMH`]: https://en.wikipedia.org/wiki/Extended_Window_Manager_Hints
 
-#![allow(dead_code)]
-
 use std::sync::Arc;
 
 use crate::atoms::AtomManager;
@@ -24,8 +22,7 @@ define_string_consts! {
 
 /// Helper for setting EWMH hints.
 ///
-/// Also provides general functions
-/// for managing properties / atoms.
+/// Also provides general functions for managing properties / atoms.
 pub struct EWMHManager {
     conn: Arc<xcb::Connection>,
     atoms: AtomManager,
@@ -41,8 +38,11 @@ impl EWMHManager {
     }
 
     /// Get the default root window.
-    fn get_root(&self) -> xcb::Window {
-        self.conn.get_setup().roots().next().unwrap().root()
+    fn get_root(&self) -> NerdResult<xcb::Window> {
+        match self.conn.get_setup().roots().next() {
+            Some(root) => Ok(root.root()),
+            None => Err(Error::NotFound("root window")),
+        }
     }
 
     /// Get the value of an atom.
@@ -152,7 +152,7 @@ impl EWMHManager {
     /// Hint supported protocols.
     pub fn set_supported(&self) -> NerdResult<()> {
         self.set_property_atom(
-            self.get_root(),
+            self.get_root()?,
             self.get_atom(protocols::_NET_SUPPORTED)?,
             &self.get_net_supported()?[..],
         )?;
@@ -163,7 +163,7 @@ impl EWMHManager {
     /// Set the `NET_WM_NAME` hint.
     pub fn set_name(&self, name: &str) -> NerdResult<()> {
         self.set_property_string(
-            self.get_root(),
+            self.get_root()?,
             self.get_atom(protocols::_NET_WM_NAME)?,
             &[name],
         )?;
@@ -174,7 +174,7 @@ impl EWMHManager {
     /// Set the `_NET_WM_PID` hint with the current process's ID.
     pub fn set_pid(&self) -> NerdResult<()> {
         self.set_property_cardinal(
-            self.get_root(),
+            self.get_root()?,
             self.get_atom(protocols::_NET_WM_PID)?,
             &[std::process::id()],
         )?;
@@ -190,14 +190,14 @@ impl EWMHManager {
     pub fn update_desktops(&self, desktops: &[&str]) -> NerdResult<()> {
         // Number of desktops
         self.set_property_cardinal(
-            self.get_root(),
+            self.get_root()?,
             self.get_atom(protocols::_NET_NUMBER_OF_DESKTOPS)?,
             &[desktops.len() as u32],
         )?;
 
         // Desktop names
         self.set_property_string(
-            self.get_root(),
+            self.get_root()?,
             self.get_atom(protocols::_NET_DESKTOP_NAMES)?,
             desktops,
         )?;
@@ -206,17 +206,29 @@ impl EWMHManager {
         Ok(())
     }
 
-    /// Change active window hints.
+    /// Change the `_NET_ACTIVE_WINDOW` hint.
     pub fn update_active_window(&self, active: Option<xcb::Window>) -> NerdResult<()> {
         let win = if let Some(w) = active { w } else { xcb::NONE };
 
         self.set_property_window(
-            self.get_root(),
+            self.get_root()?,
             self.get_atom(protocols::_NET_ACTIVE_WINDOW)?,
             &[win],
         )?;
 
         debug!("Successfully set active window");
+        Ok(())
+    }
+
+    /// Update `_NET_CLIENT_LIST` with the list of clients being managed.
+    pub fn update_client_list(&self, clients: &[xcb::Window]) -> NerdResult<()> {
+        self.set_property_window(
+            self.get_root()?,
+            self.get_atom(protocols::_NET_CLIENT_LIST)?,
+            clients,
+        )?;
+
+        debug!("Successfully updated client list");
         Ok(())
     }
 }
