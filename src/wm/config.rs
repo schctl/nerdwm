@@ -1,5 +1,7 @@
 //! Window Manager configuration structures.
 
+#![allow(unused)]
+
 use serde::{Deserialize, Serialize};
 
 use super::actions;

@@ -7,12 +7,15 @@ use crate::events;
 use serde::{Deserialize, Serialize};
 
 /// Represents all actions the window manager can perform.
+/// Actions are how the window manager and desktops interpret
+/// standard events.
 #[non_exhaustive]
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum ActionType {
-    WindowMove,
-    WindowResize,
-
+    FloatingWindowMove,
+    FloatingWindowResize,
+    /// For internal use.
+    WindowFocus,
     WindowManagerQuit,
     WindowManagerRestart,
 }

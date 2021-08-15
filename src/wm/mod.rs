@@ -11,6 +11,9 @@ pub mod desktop;
 pub mod ewmh;
 pub mod layout;
 
+use actions::{Action, ActionType};
+use events::Event;
+
 /// The "state" of the window manager. Processing of
 /// events will depend on this.
 #[derive(Debug, PartialEq, Eq)]
@@ -32,7 +35,10 @@ pub struct WindowManager {
     desktops: Vec<desktop::Desktop>,
     /// Global configurations.
     config: config::Config,
-    /// Global mode.
+    /// Global mode. For some events, the action executed
+    /// depends on the previous event, such as resizing a window.
+    /// Moving the pointer will cause the window to be resized
+    /// *only* if the previous event started the resizing action.
     mode: Mode,
 }
 
@@ -67,6 +73,19 @@ impl WindowManager {
         Ok(wm)
     }
 
+    /// Runs the event loop.
+    pub async fn run(&mut self) -> NerdResult<()> {
+        while self.conn.has_error().is_ok() {
+            self.conn.flush();
+
+            if let Some(action) = self.event_to_action(self.event_mgr.get_event()?) {
+                self.desktops[0].do_action(action)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Setup event masks, required atoms, and load configurations.
     pub fn init(&mut self) -> NerdResult<()> {
         let root = self.get_root()?;
@@ -78,7 +97,11 @@ impl WindowManager {
             root,
             &[(
                 xcb::CW_EVENT_MASK,
-                xcb::EVENT_MASK_SUBSTRUCTURE_NOTIFY | xcb::EVENT_MASK_SUBSTRUCTURE_REDIRECT,
+                xcb::EVENT_MASK_SUBSTRUCTURE_NOTIFY
+                    | xcb::EVENT_MASK_SUBSTRUCTURE_REDIRECT
+                    | xcb::EVENT_MASK_BUTTON_PRESS
+                    | xcb::EVENT_MASK_BUTTON_RELEASE
+                    | xcb::EVENT_MASK_POINTER_MOTION,
             )],
         )
         .request_check()?;
@@ -105,43 +128,10 @@ impl WindowManager {
         // Grab bindings
         for action in self.config.get_actions() {
             if let Some(k) = action.get_keybind() {
-                if let Some(keycode) = self
-                    .event_mgr
-                    .get_keysyms()
-                    .get_keycode(k.get_keysym() as u32)
-                    .next()
-                {
-                    xcb::grab_key_checked(
-                        &self.conn,
-                        true, // owner events
-                        root,
-                        k.get_modifier_mask() as u16,
-                        keycode,
-                        xcb::GRAB_MODE_ASYNC as u8, // pointer mode
-                        xcb::GRAB_MODE_ASYNC as u8, // keyboard mode
-                    )
-                    .request_check()?;
-                } else {
-                    error!("Unable to get keycode for sym {:?}", k.get_keysym());
-                }
+                let _ = self.grab_keybind(k);
             }
-
             if let Some(b) = action.get_mousebind() {
-                xcb::grab_button_checked(
-                    &self.conn,
-                    false, // owner events
-                    root,
-                    (xcb::EVENT_MASK_BUTTON_PRESS
-                        | xcb::EVENT_MASK_BUTTON_RELEASE
-                        | xcb::EVENT_MASK_POINTER_MOTION) as u16, // event mask
-                    xcb::GRAB_MODE_ASYNC as u8, // pointer mode
-                    xcb::GRAB_MODE_ASYNC as u8, // keyboard mode
-                    0,                          // confine to window
-                    0,                          // cursor
-                    b.get_button() as u8,
-                    b.get_modifier_mask() as u16,
-                )
-                .request_check()?;
+                let _ = self.grab_mousebind(b);
             }
         }
 
@@ -160,73 +150,104 @@ impl WindowManager {
         }
     }
 
+    /// Grab a keyboard binding.
+    fn grab_keybind(&self, bind: &config::KeyBind) -> NerdResult<()> {
+        if let Some(keycode) = self
+            .event_mgr
+            .get_keysyms()
+            .get_keycode(bind.get_keysym() as u32)
+            .next()
+        {
+            xcb::grab_key_checked(
+                &self.conn,
+                true, // owner events
+                self.get_root()?,
+                bind.get_modifier_mask() as u16,
+                keycode,
+                xcb::GRAB_MODE_ASYNC as u8, // pointer mode
+                xcb::GRAB_MODE_ASYNC as u8, // keyboard mode
+            )
+            .request_check()?;
+        } else {
+            error!("Unable to get keycode for sym {:?}", bind.get_keysym());
+            return Err(Error::NotFound("keycode"));
+        }
+        Ok(())
+    }
+
+    /// Grab a mouse button binding
+    fn grab_mousebind(&self, bind: &config::MouseBind) -> NerdResult<()> {
+        xcb::grab_button_checked(
+            &self.conn,
+            false, // owner events
+            self.get_root()?,
+            (xcb::EVENT_MASK_BUTTON_PRESS
+                | xcb::EVENT_MASK_BUTTON_RELEASE
+                | xcb::EVENT_MASK_POINTER_MOTION) as u16, // event mask
+            xcb::GRAB_MODE_ASYNC as u8, // pointer mode
+            xcb::GRAB_MODE_ASYNC as u8, // keyboard mode
+            0,                          // confine to window
+            0,                          // cursor
+            bind.get_button() as u8,
+            bind.get_modifier_mask() as u16,
+        )
+        .request_check()?;
+        Ok(())
+    }
+
     /// Tries to resolve an event into an action
+    ///
+    /// The following actions will cause the mode of the window manager to change:
+    ///  - [`ActionType::FloatingWindowMove`]
+    ///     This will change the window manager to the [`Mode::MovingWindow`] mode.
+    ///     This will cause all [`Event::PointerMotion`] events to be
+    ///     processed as a [`ActionType::FloatingWindowMove`] action.
     fn event_to_action(&mut self, event: events::Event) -> Option<actions::Action> {
-        // TODO: match mode inside event matches, so other events can be handled
-        // without making too much of a mess.
-        match &self.mode {
-            Mode::None => match &event {
-                events::Event::ButtonPress(e) => {
+        match &event {
+            Event::ButtonPress(e) => {
+                if let Mode::None = self.mode {
                     for action in self.config.get_actions() {
                         if let Some(b) = action.get_mousebind() {
                             if b.get_modifier_mask() == e.state() as u32
                                 && b.get_button() as u8 == e.detail()
                             {
-                                // TODO: We'll need to match against `action.get_type()` here
-                                // to determine if the mode is actually `MovingWindow`.
-                                // But this is fine for now.
-                                self.mode = Mode::MovingWindow;
-                                return Some(actions::Action::new(action.get_type(), event));
+                                let ty = action.get_type();
+                                if let ActionType::FloatingWindowMove = ty {
+                                    self.mode = Mode::MovingWindow;
+                                }
+                                return Some(Action::new(ty, event));
                             }
                         }
                     }
                 }
-                events::Event::ButtonRelease(e) => {
+            }
+            Event::ButtonRelease(e) => {
+                if let Mode::MovingWindow = self.mode {
+                    // We'll ignore modifier masks for this
                     for action in self.config.get_actions() {
                         if let Some(b) = action.get_mousebind() {
-                            if b.get_modifier_mask() == e.state() as u32
-                                && b.get_button() as u8 == e.detail()
-                            {
-                                self.mode = Mode::None;
-                                return Some(actions::Action::new(action.get_type(), event));
+                            if b.get_button() as u8 == e.detail() {
+                                let ty = action.get_type();
+                                if let ActionType::FloatingWindowMove = ty {
+                                    self.mode = Mode::None;
+                                }
+                                return Some(Action::new(ty, event));
                             }
                         }
                     }
                 }
-                _ => {}
-            },
-            Mode::MovingWindow => match &event {
-                events::Event::PointerMotion(_) => {
-                    return Some(actions::Action::new(actions::ActionType::WindowMove, event));
+            }
+            Event::PointerMotion(_) => {
+                if let Mode::MovingWindow = self.mode {
+                    return Some(Action::new(ActionType::FloatingWindowMove, event));
                 }
-                _ => {}
-            },
+            }
+            Event::WindowMapRequest(_) => {
+                return Some(Action::new(ActionType::WindowFocus, event));
+            }
             _ => {}
         }
 
         None
-    }
-
-    /// Runs the event loop.
-    pub async fn run(&mut self) -> NerdResult<()> {
-        while self.conn.has_error().is_ok() {
-            self.conn.flush();
-
-            let event = self.event_mgr.get_event()?;
-
-            match event {
-                // This will be fixed with TODO on line 165
-                events::Event::WindowMapRequest(e) => {
-                    self.desktops[0].focus(e.window())?;
-                }
-                _ => {
-                    if let Some(action) = self.event_to_action(event) {
-                        self.desktops[0].do_action(action)?;
-                    }
-                }
-            };
-        }
-
-        Ok(())
     }
 }

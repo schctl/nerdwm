@@ -22,6 +22,8 @@
 
 //! Keycode to Keysym conversion utilities.
 
+#![allow(unused)]
+
 use std::sync::Arc;
 
 use libc::{c_void, free};
