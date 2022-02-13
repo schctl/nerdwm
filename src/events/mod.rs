@@ -86,7 +86,7 @@ impl EventManager {
     pub fn get_event(&self) -> NerdResult<Event> {
         let event = match self.conn.wait_for_event() {
             Some(e) => e,
-            None => return Err(Error::NotFound("event IO")),
+            None => return Err(Error::Static("event not received")),
         };
 
         Ok(match event.response_type() {

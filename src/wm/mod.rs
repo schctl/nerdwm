@@ -147,7 +147,7 @@ impl WindowManager {
     fn get_root(&self) -> NerdResult<xcb::Window> {
         match self.conn.get_setup().roots().next() {
             Some(root) => Ok(root.root()),
-            None => Err(Error::NotFound("root window")),
+            None => Err(Error::Static("root window not found")),
         }
     }
 
@@ -170,8 +170,10 @@ impl WindowManager {
             )
             .request_check()?;
         } else {
-            error!("Unable to get keycode for sym {:?}", bind.get_keysym());
-            return Err(Error::NotFound("keycode"));
+            return Err(Error::Other(format!(
+                "unable to get keycode for sym {:?}",
+                bind.get_keysym()
+            )));
         }
         Ok(())
     }

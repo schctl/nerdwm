@@ -62,8 +62,8 @@ fn setup_logger() {
 /// The new hook writes the panic message to stderr and logs it.
 fn setup_panic() {
     std::panic::set_hook(Box::new(|info| {
-        eprintln!("{}", info);
         error!("{}", info);
+        eprintln!("{}", info);
     }));
 }
 
