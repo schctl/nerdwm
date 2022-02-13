@@ -17,6 +17,7 @@ use events::Event;
 /// The "state" of the window manager. Processing of
 /// events will depend on this.
 #[derive(Debug, PartialEq, Eq)]
+#[allow(unused)]
 enum Mode {
     None,
     MovingWindow,

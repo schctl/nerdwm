@@ -1,7 +1,7 @@
 [package]
 name = "nerdwm"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
 license = "MIT"
 readme = "README.md"
 description = "A simple X11 window manager."
@@ -9,15 +9,15 @@ repository = "https://github.com/schctl/nerdwm"
 authors = ["Sachin Cherian <sachinctl@protonmail.com>"]
 
 [dependencies]
+chrono = "0.4"
+fern = "0.6"
 log = "0.4"
 libc = "0.2"
-fern = "0.6"
-toml = "0.5"
-chrono = "0.4"
 tokio = { version = "1", features = ["full"] }
 
-xdg = "2.2"
-xcb = "0.9"
-xcb-util = { version = "0.3", features = ["keysyms"] }
-
 serde = { version = "1", features = ["derive"] }
+toml = "0.5"
+
+xcb = "0.10"
+xcb-util = { version = "0.4", features = ["keysyms"] }
+xdg = "2.2"

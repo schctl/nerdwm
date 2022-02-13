@@ -39,6 +39,7 @@ macro_rules! xcb_error_impl {
 xcb_error_impl! {
     Generic => xcb::GenericError,
     Atom => xcb::AtomError,
+    Reply => xcb::ReplyError,
 }
 
 #[non_exhaustive]
