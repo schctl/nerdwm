@@ -1,3 +1,6 @@
-# Nerdwm
+# nerdwm
 
-`Nerdwm` is a toy X11 window manager written in Rust. This is a small side project and is unlikely to ever be completed. The goal, if anything, is to be compliant with EWMH, but that is far off.
+`nerdwm` is a toy window manager for the X window system. The goal, if anything, is to be compliant
+with [EWMH], but that is far off.
+
+[ewmh]: https://en.wikipedia.org/wiki/Extended_Window_Manager_Hints
