@@ -1,12 +1,9 @@
 [package]
 name = "nerdwm"
 version = "0.0.1"
+authors = ["Sachin Cherian <sachinctl@protonmail.com>"]
 edition = "2021"
 license = "MIT"
-readme = "README.md"
-description = "A simple X11 window manager."
-repository = "https://github.com/schctl/nerdwm"
-authors = ["Sachin Cherian <sachinctl@protonmail.com>"]
 
 [dependencies]
 chrono = "0.4"
@@ -15,10 +12,10 @@ log = "0.4"
 libc = "0.2"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
+xdg = "2.2"
 
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 
 xcb = "0.10"
 xcb-util = { version = "0.4", features = ["keysyms"] }
-xdg = "2.2"
